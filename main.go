@@ -167,6 +167,23 @@ func (e *ExprsAdded) String() (str string) {
 			return e.expr1.String()
 		}
 	}
+	m1, okm1 := e.expr1.(*ExprsMultiplied)
+	m2, okm2 := e.expr2.(*ExprsMultiplied)
+	if okm1 || okm2 {
+		if okm1 && okm2 {
+			m1str, m1neg := minusMulSimplify(m1)
+			m2str, m2neg := minusMulSimplify(m2)
+			if m1neg && m2neg {
+				return "-" + m1str + " - " + m2str
+			}
+			if m1neg {
+				return m2str + " - " + m1str
+			}
+			if m2neg {
+				return m1str + " - " + m2str
+			}
+		}
+	}
 	return e.expr1.String() + " + " + e.expr2.String()
 }
 
@@ -396,4 +413,29 @@ func main() {
 
 func ftoa(f float64) string {
 	return strconv.FormatFloat(f, 'f', -1, 64)
+}
+
+func minusMulSimplify(e *ExprsMultiplied) (result string, negative bool) {
+	c, expr, ok := getConstExpr(e.expr1, e.expr2)
+	if ok {
+		if c.num == 1 {
+			return expr.String(), false
+		}
+		if c.num == -1 {
+			return expr.String(), true
+		}
+	}
+	return e.String(), false
+}
+
+func getConstExpr(e1 Expression, e2 Expression) (c *Constant, expr Expression, ok bool) {
+	c1, okc1 := e1.(*Constant)
+	c2, okc2 := e2.(*Constant)
+	if okc1 {
+		return c1, e2, true
+	}
+	if okc2 {
+		return c2, e1, true
+	}
+	return nil, nil, false
 }
