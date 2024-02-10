@@ -95,7 +95,17 @@ func (e *ExprsMultiplied) String() (str string) {
 			str = "mult[" + str + "]"
 		}()
 	}
-	return e.expr1.String() + " * " + e.expr2.String()
+	expr1str := e.expr1.String()
+	expr2str := e.expr2.String()
+	switch e.expr1.(type) {
+	case *ExprsAdded, *ExprsSubtracted:
+		expr1str = "(" + expr1str + ")"
+	}
+	switch e.expr2.(type) {
+	case *ExprsAdded, *ExprsSubtracted:
+		expr2str = "(" + expr2str + ")"
+	}
+	return expr1str + " * " + expr2str
 }
 
 type ExprsAdded struct {
@@ -167,24 +177,61 @@ func (e *ExprsAdded) String() (str string) {
 			return e.expr1.String()
 		}
 	}
-	m1, okm1 := e.expr1.(*ExprsMultiplied)
-	m2, okm2 := e.expr2.(*ExprsMultiplied)
-	if okm1 || okm2 {
-		if okm1 && okm2 {
-			m1str, m1neg := minusMulSimplify(m1)
-			m2str, m2neg := minusMulSimplify(m2)
-			if m1neg && m2neg {
-				return "-" + m1str + " - " + m2str
+	return e.expr1.String() + " + " + e.expr2.String()
+}
+
+type ExprsSubtracted struct {
+	expr1 Expression
+	expr2 Expression
+}
+
+func (e *ExprsSubtracted) simplify() Expression {
+	e.expr1 = e.expr1.simplify()
+	e.expr2 = e.expr2.simplify()
+	c1, okc1 := e.expr1.(*Constant)
+	c2, okc2 := e.expr2.(*Constant)
+	if okc1 || okc2 {
+		if okc1 && okc2 {
+			return &Constant{c1.num - c2.num}
+		}
+		if okc1 {
+			if c1.num == 0 {
+				return &ExprsMultiplied{&Constant{-1}, e.expr2}
 			}
-			if m1neg {
-				return m2str + " - " + m1str
-			}
-			if m2neg {
-				return m1str + " - " + m2str
+		}
+		if okc2 {
+			if c2.num == 0 {
+				return e.expr1
 			}
 		}
 	}
-	return e.expr1.String() + " + " + e.expr2.String()
+	return e
+}
+
+func (e *ExprsSubtracted) Derivative() Expression {
+	simp := e.simplify()
+	if simp != e {
+		return simp.Derivative()
+	}
+	return &ExprsSubtracted{expr1: e.expr1.Derivative(), expr2: e.expr2.Derivative()}
+}
+
+func (e *ExprsSubtracted) String() (str string) {
+	simp := e.simplify()
+	if simp != e {
+		return simp.String()
+	}
+	if debug {
+		defer func() {
+			str = "sub[" + str + "]"
+		}()
+	}
+	expr2Str := e.expr2.String()
+	switch e.expr2.(type) {
+	case *ExprsAdded, *ExprsSubtracted:
+		expr2Str = "(" + expr2Str + ")"
+	}
+	return e.expr1.String() + " - " + expr2Str
 }
 
 type ExprsDivided struct {
@@ -217,9 +264,9 @@ func (e *ExprsDivided) Derivative() Expression {
 		return simp.Derivative()
 	}
 	return &ExprsDivided{
-		high: &ExprsAdded{
+		high: &ExprsSubtracted{
 			expr1: &ExprsMultiplied{expr1: e.high.Derivative(), expr2: e.low},
-			expr2: &ExprsMultiplied{&Constant{-1}, &ExprsMultiplied{expr1: e.high, expr2: e.low.Derivative()}},
+			expr2: &ExprsMultiplied{expr1: e.high, expr2: e.low.Derivative()},
 		},
 		low: &Polynomial{powerToCoeff: map[float64]float64{2: 1}, inside: e.low},
 	}
@@ -235,10 +282,17 @@ func (e *ExprsDivided) String() (str string) {
 			str = "div[" + str + "]"
 		}()
 	}
-	if add, ok := e.high.(*ExprsAdded); ok {
-		return "(" + add.String() + ") / " + e.low.String()
+	highStr := e.high.String()
+	lowStr := e.low.String()
+	switch e.high.(type) {
+	case *ExprsAdded, *ExprsSubtracted:
+		highStr = "(" + highStr + ")"
 	}
-	return "" + e.high.String() + " / " + e.low.String() + ""
+	switch e.low.(type) {
+	case *ExprsAdded, *ExprsSubtracted, *ExprsMultiplied, *ExprsDivided:
+		lowStr = "(" + lowStr + ")"
+	}
+	return highStr + " / " + lowStr
 }
 
 type Polynomial struct {
@@ -355,26 +409,14 @@ func main() {
 	//	&Polynomial{map[float64]float64{30: 1, 31: 1}, &X{}},
 	//}
 	// 1 + 2(x+3) + 3(x+3)^2
-	p := &ExprsAdded{
-		&ExprsAdded{
-			&ExprsDivided{
-				&Polynomial{
-					powerToCoeff: map[float64]float64{0: 3, 5: 1},
-					inside:       &X{},
-				},
-				&Polynomial{
-					powerToCoeff: map[float64]float64{-1: 3, 0: 3, 4: 1, 5: 1},
-					inside:       &X{},
-				},
-			},
-			&Constant{1},
+	p := &ExprsDivided{
+		&Polynomial{
+			powerToCoeff: map[float64]float64{0: 3, 5: 1},
+			inside:       &X{},
 		},
-		&ExprsDivided{
-			&Constant{3},
-			&Polynomial{
-				powerToCoeff: map[float64]float64{20: 1},
-				inside:       &Polynomial{powerToCoeff: map[float64]float64{0: 3, 0.5: 1, 1: 1}, inside: &X{}},
-			},
+		&Polynomial{
+			powerToCoeff: map[float64]float64{-1: 3, 5: 1},
+			inside:       &X{},
 		},
 	}
 	//fmt.Println(p)
@@ -389,6 +431,10 @@ func main() {
 	//}
 	fmt.Println(p)
 	fmt.Println(p.Derivative())
+	//legible(p.Derivative().String())
+	fmt.Println(p.Derivative().Derivative())
+	legible(p.Derivative().Derivative().String())
+	//legible(p.Derivative().Derivative().String())
 	//fmt.Println(p.Derivative().Derivative())
 	//fmt.Println(p.Derivative().Derivative().Derivative())
 	//fmt.Println(p.Derivative().Derivative().Derivative().Derivative())
@@ -438,4 +484,54 @@ func getConstExpr(e1 Expression, e2 Expression) (c *Constant, expr Expression, o
 		return c2, e1, true
 	}
 	return nil, nil, false
+}
+
+func legible(e string) {
+	// example: (3 + x^5) / (3x^-1 + x^5) + 3(3 + x^0.5 + x)^-20
+	// get the maximum depth of the expression
+
+	maxdepth := 0
+	currdepth := 0
+	for _, c := range e {
+		if c == '(' {
+			currdepth++
+		}
+		if c == ')' {
+			currdepth--
+		}
+		if currdepth > maxdepth {
+			maxdepth = currdepth
+		}
+	}
+	//fmt.Println("maxdepth", maxdepth)
+
+	// iterate through th expression agaib, this time adding spaces depending on the depth
+	currdepth = 0
+	newstr := ""
+	for i, c := range e {
+		if c == '(' {
+			currdepth++
+		}
+		if c == ')' {
+			currdepth--
+		}
+		//fmt.Print(currdepth)
+
+		if currdepth == 0 || currdepth == 1 {
+			if (c == '+' || c == '-') && e[i+1] == ' ' {
+				newstr += "\n"
+			} else {
+
+			}
+		}
+		newstr += string(c)
+
+		//if c == '+' || c == '-' && e[i+1] == ' ' { // || c == '*' || c == '/'
+		//	newstr += strings.Repeat(" ", (maxdepth-currdepth)) + string(c) + strings.Repeat(" ", (maxdepth-currdepth))
+		//} else {
+		//	newstr += string(c)
+		//}
+	}
+	//fmt.Println()
+	fmt.Println(newstr)
 }
