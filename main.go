@@ -5,6 +5,7 @@ import (
 	"math"
 	"slices"
 	"strconv"
+	"strings"
 )
 
 var debug = false
@@ -20,12 +21,21 @@ type Constant struct{ num float64 }
 func (n *Constant) Derivative() Expression { return &Constant{0} }
 func (n *Constant) String() string         { return ftoa(n.num) }
 func (n *Constant) simplify() Expression   { return n }
+func num(num float64) *Constant            { return &Constant{num} }
 
 type X struct{}
 
 func (x *X) Derivative() Expression { return &Constant{1} }
 func (x *X) String() string         { return "x" }
 func (x *X) simplify() Expression   { return x }
+func x() *X                         { return &X{} }
+
+type Y struct{ derivnum int }
+
+func (y *Y) Derivative() Expression { return &Y{y.derivnum + 1} }
+func (y *Y) String() string         { return "y" + strings.Repeat("'", y.derivnum) }
+func (y *Y) simplify() Expression   { return y }
+func y() *Y                         { return &Y{} }
 
 type ExprsMultiplied struct {
 	expr1 Expression
@@ -56,6 +66,12 @@ func (e *ExprsMultiplied) simplify() Expression {
 			if c2, ok := mul.expr1.(*Constant); ok {
 				return &ExprsMultiplied{expr1: &Constant{constant.num * c2.num}, expr2: mul.expr2}
 			}
+		}
+		if polyn, ok := expr.(*Polynomial); ok {
+			for power, coeff := range polyn.powerToCoeff {
+				polyn.powerToCoeff[power] = coeff * constant.num
+			}
+			return polyn
 		}
 		if constant.num == 0 {
 			return constant
@@ -97,15 +113,17 @@ func (e *ExprsMultiplied) String() (str string) {
 	}
 	expr1str := e.expr1.String()
 	expr2str := e.expr2.String()
-	switch e.expr1.(type) {
-	case *ExprsAdded, *ExprsSubtracted:
-		expr1str = "(" + expr1str + ")"
-	}
-	switch e.expr2.(type) {
-	case *ExprsAdded, *ExprsSubtracted:
-		expr2str = "(" + expr2str + ")"
-	}
 	return expr1str + " * " + expr2str
+}
+
+func mult(es ...Expression) Expression {
+	if len(es) == 0 {
+		return &Constant{1}
+	}
+	if len(es) == 1 {
+		return es[0]
+	}
+	return &ExprsMultiplied{es[0], mult(es[1:]...)}
 }
 
 type ExprsAdded struct {
@@ -143,16 +161,6 @@ func (e *ExprsAdded) Derivative() Expression {
 	if simp != e {
 		return simp.Derivative()
 	}
-	if _, ok := e.expr1.(*Constant); ok {
-		if e.expr1.(*Constant).num == 0 {
-			return e.expr2.Derivative()
-		}
-	}
-	if _, ok := e.expr2.(*Constant); ok {
-		if e.expr2.(*Constant).num == 0 {
-			return e.expr1.Derivative()
-		}
-	}
 	return &ExprsAdded{expr1: e.expr1.Derivative(), expr2: e.expr2.Derivative()}
 }
 
@@ -167,17 +175,30 @@ func (e *ExprsAdded) String() (str string) {
 		}()
 	}
 
-	if _, ok := e.expr1.(*Constant); ok {
-		if e.expr1.(*Constant).num == 0 {
-			return e.expr2.String()
-		}
+	expr1str := e.expr1.String()
+	expr2str := e.expr2.String()
+
+	switch e.expr1.(type) {
+	case *ExprsSubtracted, *ExprsAdded:
+		expr1str = expr1str[1 : len(expr1str)-1]
 	}
-	if _, ok := e.expr2.(*Constant); ok {
-		if e.expr2.(*Constant).num == 0 {
-			return e.expr1.String()
-		}
+	switch e.expr2.(type) {
+	case *ExprsSubtracted, *ExprsAdded:
+		expr2str = expr2str[1 : len(expr2str)-1]
 	}
-	return e.expr1.String() + " + " + e.expr2.String()
+
+	//return "[" + e.expr1.String() + " + " + e.expr2.String() + "]"
+	return "(" + expr1str + " + " + expr2str + ")"
+}
+
+func add(es ...Expression) Expression {
+	if len(es) == 0 {
+		return &Constant{0}
+	}
+	if len(es) == 1 {
+		return es[0]
+	}
+	return &ExprsAdded{es[0], add(es[1:]...)}
 }
 
 type ExprsSubtracted struct {
@@ -227,12 +248,10 @@ func (e *ExprsSubtracted) String() (str string) {
 		}()
 	}
 	expr2Str := e.expr2.String()
-	switch e.expr2.(type) {
-	case *ExprsAdded, *ExprsSubtracted:
-		expr2Str = "(" + expr2Str + ")"
-	}
-	return e.expr1.String() + " - " + expr2Str
+	return "(" + e.expr1.String() + " - " + expr2Str + ")"
 }
+
+func subtract(e1 Expression, e2 Expression) Expression { return &ExprsSubtracted{e1, e2} }
 
 type ExprsDivided struct {
 	high Expression
@@ -284,16 +303,19 @@ func (e *ExprsDivided) String() (str string) {
 	}
 	highStr := e.high.String()
 	lowStr := e.low.String()
-	switch e.high.(type) {
-	case *ExprsAdded, *ExprsSubtracted:
-		highStr = "(" + highStr + ")"
-	}
+	//switch e.high.(type) {
+	//case *ExprsAdded, *ExprsSubtracted:
+	//	highStr = "(" + highStr + ")"
+	//}
 	switch e.low.(type) {
-	case *ExprsAdded, *ExprsSubtracted, *ExprsMultiplied, *ExprsDivided:
-		lowStr = "(" + lowStr + ")"
+	//case *ExprsAdded, *ExprsSubtracted, *ExprsMultiplied, *ExprsDivided:
+	case *ExprsMultiplied, *ExprsDivided:
+		lowStr = "[ " + lowStr + " ]"
 	}
 	return highStr + " / " + lowStr
 }
+
+func div(e1 Expression, e2 Expression) Expression { return &ExprsDivided{e1, e2} }
 
 type Polynomial struct {
 	powerToCoeff map[float64]float64
@@ -359,11 +381,14 @@ func (p *Polynomial) String() (str string) {
 	}
 
 	insideStr := p.inside.String()
-	if _, ok := p.inside.(*Constant); ok {
-		if p.inside.(*Constant).num == 0 {
+	if c, ok := p.inside.(*Constant); ok {
+		if c.num == 0 {
 			return "0"
 		}
-		insideStr = "(" + insideStr + ")"
+	}
+	switch p.inside.(type) {
+	case *ExprsMultiplied, *ExprsDivided:
+		insideStr = "[ " + insideStr + " ]"
 	}
 	// Sort the powers in ascending order
 	powers := make([]float64, 0, len(p.powerToCoeff))
@@ -371,6 +396,7 @@ func (p *Polynomial) String() (str string) {
 		powers = append(powers, power)
 	}
 	slices.Sort(powers)
+	slices.Reverse(powers)
 	for _, power := range powers {
 		coeff := p.powerToCoeff[power]
 		if coeff == 0 {
@@ -399,6 +425,10 @@ func (p *Polynomial) String() (str string) {
 		return str
 	}
 	return "(" + str + ")"
+}
+
+func poly(powerToCoeff map[float64]float64, inside Expression) *Polynomial {
+	return &Polynomial{powerToCoeff, inside}
 }
 
 type Log struct {
@@ -438,11 +468,21 @@ func (l *Log) String() string {
 	if simp != l {
 		return simp.String()
 	}
-	if l.base == E {
-		return "ln(" + l.expr.String() + ")"
+	insideStr := l.expr.String()
+	if _, ok := l.expr.(*Polynomial); !ok {
+		if _, ok := l.expr.(*Constant); ok {
+			insideStr = "(" + insideStr + ")"
+		} else {
+			insideStr = "[ " + insideStr + " ]"
+		}
 	}
-	return "log_" + ftoa(l.base) + "(" + l.expr.String() + ")"
+	if l.base == E {
+		return "ln" + insideStr
+	}
+	return "log_" + ftoa(l.base) + insideStr
 }
+
+func log(base float64, expr Expression) *Log { return &Log{base, expr} }
 
 type Exponential struct {
 	base  float64
@@ -485,75 +525,30 @@ func (e *Exponential) String() string {
 	if simp != e {
 		return simp.String()
 	}
-	if e.base == E {
-		return "e^(" + e.power.String() + ")"
+	insideStr := e.power.String()
+	if _, ok := e.power.(*Polynomial); !ok {
+		insideStr = "[ " + insideStr + " ]"
 	}
-	return ftoa(e.base) + "^(" + e.power.String() + ")"
+	if e.base == E {
+		return "e^" + insideStr
+	}
+	return ftoa(e.base) + "^" + insideStr
 }
 
-func main() {
-	//p := &Polynomial{map[float64]float64{0: 1, 1: 2, 2: 3},
-	//	&Polynomial{map[float64]float64{30: 1, 31: 1}, &X{}},
-	//}
-	//p := &Polynomial{map[float64]float64{2: 1, 3: 1, 4: 0},
-	//	&Polynomial{map[float64]float64{30: 1, 31: 1}, &X{}},
-	//}
-	// 1 + 2(x+3) + 3(x+3)^2
-	//p := &ExprsDivided{
-	//	&Polynomial{
-	//		powerToCoeff: map[float64]float64{0: 3, 5: 1},
-	//		inside:       &X{},
-	//	},
-	//	&Polynomial{
-	//		powerToCoeff: map[float64]float64{-1: 3, 5: 1},
-	//		inside:       &X{},
-	//	},
-	//}
-	p := &Exponential{
-		base: 3,
-		//power: &Log{base: 2, expr: &X{}},
-		//power: &X{},
-		power: &Polynomial{
-			powerToCoeff: map[float64]float64{0: 3, 5: 1},
-			inside:       &X{},
-		},
-	}
-	//fmt.Println(p)
-	//fmt.Println(p.Derivative())
-	//fmt.Println(p.Derivative().Derivative())
-	//fmt.Println(p.Derivative().Derivative().Derivative())
-	//fmt.Println(p.Derivative().Derivative().Derivative().Derivative())
+func exp(base float64, power Expression) *Exponential { return &Exponential{base, power} }
 
-	//p := &ExprsMultiplied{
-	//	&Polynomial{map[int]int{0: 1}, &X{}},
-	//	&Polynomial{map[int]int{30: 1}, &X{}},
-	//}
+func main() {
+	p := add(
+		x(),
+		exp(E, x()),
+		mult(num(2), log(2, y())),
+		poly(map[float64]float64{2: 3, 1: 2, 0: 1}, x()),
+	)
+
 	fmt.Println(p)
 	fmt.Println(p.Derivative())
-	//legible(p.Derivative().String())
 	fmt.Println(p.Derivative().Derivative())
-	//legible(p.Derivative().Derivative().String())
-	//legible(p.Derivative().Derivative().String())
-	//fmt.Println(p.Derivative().Derivative())
-	//fmt.Println(p.Derivative().Derivative().Derivative())
-	//fmt.Println(p.Derivative().Derivative().Derivative().Derivative())
-
-	// 1 + 2(x+2) + 3(x+3)^2
-	//p := &Polynomial{map[int]int{0: 1},
-	//	&X{},
-	//}
-	//fmt.Println(p)
-	//fmt.Println(p.Derivative())
-	//fmt.Println(p.Derivative().Derivative())
-	//fmt.Println(p.Derivative().Derivative().Derivative())
-
-	//p := &ExprsMultiplied{&Constant{6}, &Polynomial{
-	//	powerToCoeff: map[int]int{0: 1, 1: 2, 2: 3},
-	//	inside:       &X{},
-	//}}
-	//fmt.Println(p)
-	//fmt.Println(p.Derivative())
-	//fmt.Println(p.Derivative().Derivative())
+	fmt.Println(p.Derivative().Derivative().Derivative())
 }
 
 func ftoa(f float64) string {
