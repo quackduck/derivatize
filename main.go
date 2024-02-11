@@ -265,7 +265,7 @@ func (e *ExprsDivided) Derivative() Expression {
 	}
 	return &ExprsDivided{
 		high: &ExprsSubtracted{
-			expr1: &ExprsMultiplied{expr1: e.high.Derivative(), expr2: e.low},
+			expr1: &ExprsMultiplied{expr1: e.low, expr2: e.high.Derivative()},
 			expr2: &ExprsMultiplied{expr1: e.high, expr2: e.low.Derivative()},
 		},
 		low: &Polynomial{powerToCoeff: map[float64]float64{2: 1}, inside: e.low},
@@ -401,6 +401,96 @@ func (p *Polynomial) String() (str string) {
 	return "(" + str + ")"
 }
 
+type Log struct {
+	base float64
+	expr Expression
+}
+
+func (l *Log) simplify() Expression {
+	l.expr = l.expr.simplify()
+	//if c, ok := l.expr.(*Constant); ok {
+	//	return &Constant{math.Log(c.num) / math.Log(l.base)}
+	//}
+	return l
+}
+
+var E = math.E
+
+func (l *Log) Derivative() Expression {
+	simp := l.simplify()
+	if simp != l {
+		return simp.Derivative()
+	}
+	if l.base == E {
+		return &ExprsDivided{l.expr.Derivative(), l.expr}
+	}
+	return &ExprsDivided{
+		l.expr.Derivative(),
+		&ExprsMultiplied{
+			l.expr,
+			&Log{E, &Constant{l.base}},
+		},
+	}
+}
+
+func (l *Log) String() string {
+	simp := l.simplify()
+	if simp != l {
+		return simp.String()
+	}
+	if l.base == E {
+		return "ln(" + l.expr.String() + ")"
+	}
+	return "log_" + ftoa(l.base) + "(" + l.expr.String() + ")"
+}
+
+type Exponential struct {
+	base  float64
+	power Expression
+}
+
+func (e *Exponential) simplify() Expression {
+	e.power = e.power.simplify()
+	if c, ok := e.power.(*Constant); ok {
+		return &Constant{math.Pow(e.base, c.num)}
+	}
+	return e
+}
+
+func (e *Exponential) Derivative() Expression {
+	simp := e.simplify()
+	if simp != e {
+		return simp.Derivative()
+	}
+	if e.base == E {
+		return &ExprsMultiplied{
+			&Exponential{E, e.power},
+			e.power.Derivative(),
+		}
+	}
+	return &ExprsMultiplied{
+		expr1: &ExprsMultiplied{
+			&Log{base: E, expr: &Constant{e.base}},
+			&Exponential{
+				base:  e.base,
+				power: e.power,
+			},
+		},
+		expr2: e.power.Derivative(),
+	}
+}
+
+func (e *Exponential) String() string {
+	simp := e.simplify()
+	if simp != e {
+		return simp.String()
+	}
+	if e.base == E {
+		return "e^(" + e.power.String() + ")"
+	}
+	return ftoa(e.base) + "^(" + e.power.String() + ")"
+}
+
 func main() {
 	//p := &Polynomial{map[float64]float64{0: 1, 1: 2, 2: 3},
 	//	&Polynomial{map[float64]float64{30: 1, 31: 1}, &X{}},
@@ -409,13 +499,22 @@ func main() {
 	//	&Polynomial{map[float64]float64{30: 1, 31: 1}, &X{}},
 	//}
 	// 1 + 2(x+3) + 3(x+3)^2
-	p := &ExprsDivided{
-		&Polynomial{
+	//p := &ExprsDivided{
+	//	&Polynomial{
+	//		powerToCoeff: map[float64]float64{0: 3, 5: 1},
+	//		inside:       &X{},
+	//	},
+	//	&Polynomial{
+	//		powerToCoeff: map[float64]float64{-1: 3, 5: 1},
+	//		inside:       &X{},
+	//	},
+	//}
+	p := &Exponential{
+		base: 3,
+		//power: &Log{base: 2, expr: &X{}},
+		//power: &X{},
+		power: &Polynomial{
 			powerToCoeff: map[float64]float64{0: 3, 5: 1},
-			inside:       &X{},
-		},
-		&Polynomial{
-			powerToCoeff: map[float64]float64{-1: 3, 5: 1},
 			inside:       &X{},
 		},
 	}
@@ -433,7 +532,7 @@ func main() {
 	fmt.Println(p.Derivative())
 	//legible(p.Derivative().String())
 	fmt.Println(p.Derivative().Derivative())
-	legible(p.Derivative().Derivative().String())
+	//legible(p.Derivative().Derivative().String())
 	//legible(p.Derivative().Derivative().String())
 	//fmt.Println(p.Derivative().Derivative())
 	//fmt.Println(p.Derivative().Derivative().Derivative())
