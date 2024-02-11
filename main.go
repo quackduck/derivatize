@@ -42,7 +42,7 @@ type ExprsMultiplied struct {
 }
 
 func (e *ExprsMultiplied) simplify() Expression {
-	newEs := make([]Expression, 0, len(e.es))
+	merged := make([]Expression, 0, len(e.es))
 	// combine constants
 	constant := 1.0
 	changed := false
@@ -52,32 +52,31 @@ func (e *ExprsMultiplied) simplify() Expression {
 		if mult2, ok := expr.(*ExprsMultiplied); ok {
 			//fmt.Println("mult2", mult2.es)
 			changed = true
-			newEs = append(newEs, mult2.es...)
+			merged = append(merged, mult2.es...)
 			newTerms += len(mult2.es) - 1
 		} else {
-			newEs = append(newEs, expr)
+			merged = append(merged, expr)
 		}
 	}
 
-	noConsts := make([]Expression, 0, len(newEs))
-	for _, expr := range newEs {
+	noConsts := make([]Expression, 0, len(merged))
+	for _, expr := range merged {
 		if c, ok := expr.(*Constant); ok {
+			if c.num == 0 {
+				return &Constant{0}
+			}
 			constant *= c.num
 			constCount++
 		} else {
-			noConsts = append(noConsts, expr)
+			noConsts = append(noConsts, expr.simplify())
 		}
 	}
-
-	if constCount == (len(e.es) + newTerms) {
-		//fmt.Println("all constants")
-		return &Constant{constant}
+	if len(noConsts) == 0 {
+		return num(constant)
 	}
-
 	if constCount > 1 {
 		changed = true
 	}
-
 	if len(e.es) > 0 {
 		if c, ok := e.es[0].(*Constant); !ok { // if the first element is not a constant
 			if constCount != 0 { // if there are constants
@@ -90,20 +89,12 @@ func (e *ExprsMultiplied) simplify() Expression {
 			}
 		}
 	}
-
-	if constant == 0 {
-		//fmt.Println(e.es)
-		return &Constant{0}
-	}
-
 	if constant != 1.0 {
 		noConsts = append([]Expression{&Constant{constant}}, noConsts...)
 	}
-
 	if changed {
 		return &ExprsMultiplied{noConsts}
 	} else {
-		//fmt.Println("no change")
 		return e
 	}
 }
