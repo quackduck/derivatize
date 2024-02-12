@@ -20,7 +20,7 @@ func main() {
 	//p := div(num(1), log(E, mul(x(), add(x(), x()))))
 
 	// x ln x - ln y
-	p := subtract(mul(x(), log(E, x())), log(E, y()))
+	p := subtract(mul(x(), log(E, x())), log(E, add(y(), y().Derivative())))
 
 	// test combining polys and vars
 	//p := add(
@@ -337,6 +337,14 @@ func addPolysAndVars(es []Expression) []Expression {
 	var ys []*Y
 	ys, rest = splitByType[*Y](rest)
 
+	for i := 0; i < len(ys); i++ {
+		if ys[i].derivnum != 0 {
+			rest = append(rest, ys[i])
+			ys = append(ys[:i], ys[i+1:]...)
+			i--
+		}
+	}
+
 	xPowerCoeffs := make(map[float64]float64)
 	yPowerCoeffs := make(map[float64]float64)
 
@@ -447,12 +455,6 @@ func (e *ExprsAdded) String() (str string) {
 }
 
 func add(es ...Expression) Expression {
-	//if len(es) == 0 {
-	//	return &Constant{0}
-	//}
-	//if len(es) == 1 {
-	//	return es[0]
-	//}
 	return &ExprsAdded{es}
 }
 
@@ -502,8 +504,12 @@ func (e *ExprsSubtracted) String() (str string) {
 			str = "sub[" + str + "]"
 		}()
 	}
-	expr2Str := e.expr2.String()
-	return "(" + e.expr1.String() + " - " + expr2Str + ")"
+	expr1str := e.expr1.String()
+	switch e.expr1.(type) {
+	case *ExprsAdded, *ExprsSubtracted, *Polynomial:
+		expr1str = expr1str[1 : len(expr1str)-1]
+	}
+	return "(" + expr1str + " - " + e.expr2.String() + ")"
 }
 
 func subtract(e1 Expression, e2 Expression) Expression { return &ExprsSubtracted{e1, e2} }
