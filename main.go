@@ -17,7 +17,19 @@ type Expression interface {
 }
 
 func main() {
-	p := div(num(1), log(E, add(x(), y())))
+	//p := div(num(1), log(E, mul(x(), add(x(), x()))))
+
+	// x ln x - ln y
+	p := subtract(mul(x(), log(E, x())), log(E, y()))
+
+	// test combining polys and vars
+	//p := add(
+	//	poly(map[float64]float64{1: 2, 2: 3}, x()),
+	//	poly(map[float64]float64{1: 2, 2: 3}, y()),
+	//	poly(map[float64]float64{1: 2, 2: 3}, x()),
+	//	poly(map[float64]float64{1: 2, 2: 3}, y()),
+	//	x(), x(), x(),
+	//)
 
 	fmt.Print("f(x)   = ")
 	legible(p)
@@ -25,6 +37,27 @@ func main() {
 	legible(p.Derivative())
 	fmt.Print("f''(x) = ")
 	legible(p.Derivative().Derivative())
+
+	//// make a list of expressions to test splitting
+	//es := []Expression{
+	//	mul(num(1), num(2), num(3)),
+	//	poly(map[float64]float64{1: 2, 2: 3}, x()),
+	//	y(), y(), y(),
+	//	x(), x(), x(),
+	//}
+	//// split the list into polynomials, x, y and the rest
+	//polys, rest := splitByType[*Polynomial](es)
+	//fmt.Println("polys", polys)
+	//var xs []*X
+	//xs, rest = splitByType[*X](rest)
+	//fmt.Println("xs", xs)
+	//var ys []*Y
+	//ys, rest = splitByType[*Y](rest)
+	//fmt.Println("ys", ys)
+	//var muls []*ExprsMultiplied
+	//muls, rest = splitByType[*ExprsMultiplied](rest)
+	//fmt.Println("muls", muls)
+	//fmt.Println("rest", rest)
 }
 
 type Constant struct{ num float64 }
@@ -88,11 +121,110 @@ func (e *ExprsMultiplied) simplify() Expression {
 	if len(noConsts) == 0 {
 		return num(constant)
 	}
+	noConsts = mulPolysAndVars(noConsts)
 	if constant != 1.0 {
 		noConsts = append([]Expression{&Constant{constant}}, noConsts...)
 	}
 	e.es = noConsts
 	return e
+}
+
+func mulPolysAndVars(es []Expression) []Expression {
+
+	//fmt.Println("es", es)
+
+	// split into polynomials, x, y and the rest
+	polys, rest := splitByType[*Polynomial](es)
+	var xs []*X
+	xs, rest = splitByType[*X](rest)
+	var ys []*Y
+	ys, rest = splitByType[*Y](rest)
+
+	for i := 0; i < len(ys); i++ {
+		if ys[i].derivnum != 0 {
+			rest = append(rest, ys[i])
+			ys = append(ys[:i], ys[i+1:]...)
+			i--
+		}
+	}
+
+	if len(xs) == 0 && len(ys) == 0 {
+		return es
+	}
+
+	xdone := false
+	ydone := false
+
+	if len(xs) == 0 {
+		xdone = true
+	}
+	if len(ys) == 0 {
+		ydone = true
+	}
+
+	for _, p := range polys {
+		_, isX := p.inside.(*X)
+		yin, isY := p.inside.(*Y)
+		if isY && yin.derivnum != 0 {
+			isY = false // ignore y' y'' etc for now at least
+		}
+		if !isX && !isY {
+			//rest = append(rest, p)
+			continue
+		}
+		for power := range p.powerToCoeff {
+			if isX {
+				p.powerToCoeff[power] += float64(len(xs))
+				//fmt.Println("added to x", power, coeff)
+			} else if isY {
+				p.powerToCoeff[power] += float64(len(xs))
+				//fmt.Println("added to y", power, coeff)
+			}
+		}
+		xdone = xdone || isX
+		ydone = ydone || isY
+		if xdone && ydone {
+
+			break
+		}
+	}
+	//rest = append(rest, polys...)
+	for p, _ := range polys {
+		rest = append(rest, polys[p])
+	}
+	if !xdone {
+		//for _, x := range xs {
+		//	rest = append(rest, x)
+		//}
+		if len(xs) == 1 {
+			rest = append(rest, x())
+		} else {
+			rest = append(rest, poly(map[float64]float64{float64(len(xs)): 1}, x()))
+		}
+	}
+	if !ydone {
+		//for _, y := range ys {
+		//	rest = append(rest, y)
+		//}
+		if len(ys) == 1 {
+			rest = append(rest, y())
+		} else {
+			rest = append(rest, poly(map[float64]float64{float64(len(ys)): 1}, y()))
+		}
+	}
+	return rest
+}
+
+// splitByType splits a list of expressions based on an input type. this is a generic function
+func splitByType[T Expression](es []Expression) (split []T, rest []Expression) {
+	for _, e := range es {
+		if e2, ok := any(e).(T); ok {
+			split = append(split, e2)
+		} else {
+			rest = append(rest, e)
+		}
+	}
+	return
 }
 
 func (e *ExprsMultiplied) Derivative() Expression {
@@ -191,8 +323,66 @@ func (e *ExprsAdded) simplify() Expression {
 	if constant != 0.0 {
 		noConsts = append([]Expression{&Constant{constant}}, noConsts...)
 	}
-	e.es = noConsts
+	e.es = addPolysAndVars(noConsts)
+	// e.es = noConsts
 	return e
+}
+
+func addPolysAndVars(es []Expression) []Expression {
+	// split into polynomials, x, y and the rest
+	polys, rest := splitByType[*Polynomial](es)
+	var xs []*X
+	xs, rest = splitByType[*X](rest)
+
+	var ys []*Y
+	ys, rest = splitByType[*Y](rest)
+
+	xPowerCoeffs := make(map[float64]float64)
+	yPowerCoeffs := make(map[float64]float64)
+
+	for _, p := range polys {
+		_, isX := p.inside.(*X)
+		yin, isY := p.inside.(*Y)
+		if isY && yin.derivnum != 0 {
+			isY = false // ignore y' y'' etc for now at least
+		}
+		if !isX && !isY {
+			rest = append(rest, p)
+			continue
+		}
+		for power, coeff := range p.powerToCoeff {
+			if isX {
+				xPowerCoeffs[power] += coeff
+				//fmt.Println("added to x", power, coeff)
+			} else if isY {
+				yPowerCoeffs[power] += coeff
+				//fmt.Println("added to y", power, coeff)
+			}
+		}
+	}
+
+	if len(xs) > 0 {
+		if len(xPowerCoeffs) == 0 {
+			rest = append(rest, mul(num(float64(len(xs))), x()))
+		} else {
+			xPowerCoeffs[1] += float64(len(xs))
+		}
+	}
+	if len(ys) > 0 {
+		if len(yPowerCoeffs) == 0 {
+			rest = append(rest, mul(num(float64(len(ys))), y()))
+		} else {
+			yPowerCoeffs[1] += float64(len(ys))
+		}
+	}
+
+	if len(xPowerCoeffs) > 0 {
+		rest = append(rest, poly(xPowerCoeffs, x()).simplify())
+	}
+	if len(yPowerCoeffs) > 0 {
+		rest = append(rest, poly(yPowerCoeffs, y()).simplify())
+	}
+	return rest
 }
 
 func (e *ExprsAdded) Derivative() Expression {
@@ -340,6 +530,9 @@ func (e *ExprsDivided) simplify() Expression {
 		if polyn, ok := e.low.(*Polynomial); ok { // constant divided by polynomial
 			return (poly(map[float64]float64{-1: c1.num}, polyn)).simplify()
 		}
+		if x, ok := e.low.(*X); ok {
+			return (poly(map[float64]float64{-1: c1.num}, x)).simplify()
+		}
 	}
 	return e
 }
@@ -421,22 +614,13 @@ func (p *Polynomial) Derivative() Expression {
 	if _, ok := p.inside.(*Constant); ok {
 		return num(0)
 	}
-	if len(p.powerToCoeff) == 1 {
-		for power, coeff := range p.powerToCoeff {
-			if power == 0 {
-				return num(0)
-			}
-			if power == 1 {
-				return mul(num(coeff), p.inside.Derivative())
-			}
-		}
-	}
 	derivative := poly(make(map[float64]float64, len(p.powerToCoeff)), p.inside)
 	for power, coeff := range p.powerToCoeff {
 		if power != 0 {
 			derivative.powerToCoeff[power-1] = power * coeff
 		}
 	}
+	//fmt.Println("multiplying by", p.inside.Derivative())
 	return mul(derivative, p.inside.Derivative())
 }
 
@@ -542,9 +726,7 @@ type Log struct {
 
 func (l *Log) simplify() Expression {
 	l.expr = l.expr.simplify()
-	//if c, ok := l.expr.(*Constant); ok {
-	//	return &Constant{math.Log(c.num) / math.Log(l.base)}
-	//}
+
 	if e, ok := l.expr.(*Exponential); ok {
 		if e.base == l.base {
 			return e.power
