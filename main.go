@@ -8,12 +8,23 @@ import (
 	"strings"
 )
 
-var debug = true
+var debug = false
 
 type Expression interface {
 	Derivative() Expression
 	String() string
 	simplify() Expression
+}
+
+func main() {
+	p := div(num(1), log(E, add(x(), y())))
+
+	fmt.Print("f(x)   = ")
+	legible(p)
+	fmt.Print("f'(x)  = ")
+	legible(p.Derivative())
+	fmt.Print("f''(x) = ")
+	legible(p.Derivative().Derivative())
 }
 
 type Constant struct{ num float64 }
@@ -42,15 +53,16 @@ type ExprsMultiplied struct {
 }
 
 func (e *ExprsMultiplied) simplify() Expression {
+	if len(e.es) == 1 {
+		return e.es[0].simplify()
+	}
 	merged := make([]Expression, 0, len(e.es))
 	// combine constants
 	constant := 1.0
-	changed := false
 	constCount := 0
 	newTerms := 0
 	for _, expr := range e.es {
 		if mult2, ok := expr.(*ExprsMultiplied); ok {
-			changed = true
 			for i, expr2 := range mult2.es {
 				mult2.es[i] = expr2.simplify()
 			}
@@ -76,29 +88,11 @@ func (e *ExprsMultiplied) simplify() Expression {
 	if len(noConsts) == 0 {
 		return num(constant)
 	}
-	if constCount > 1 {
-		changed = true
-	}
-	if len(e.es) > 0 {
-		if c, ok := e.es[0].(*Constant); !ok { // if the first element is not a constant
-			if constCount != 0 { // if there are constants
-				changed = true // we changed the order of the constants
-			}
-		} else {
-			// if the first element is a constant and is 1 then a change has been made
-			if c.num == 1 {
-				changed = true
-			}
-		}
-	}
 	if constant != 1.0 {
 		noConsts = append([]Expression{&Constant{constant}}, noConsts...)
 	}
-	if changed {
-		return &ExprsMultiplied{noConsts}
-	} else {
-		return e
-	}
+	e.es = noConsts
+	return e
 }
 
 func (e *ExprsMultiplied) Derivative() Expression {
@@ -112,30 +106,23 @@ func (e *ExprsMultiplied) Derivative() Expression {
 	result := make([]Expression, 0, len(e.es))
 	for i := range e.es {
 		if i == 0 {
-			result = append(result, mult(e.es[i].Derivative(), mult(e.es[i+1:]...)))
+			result = append(result, mul(e.es[i].Derivative(), mul(e.es[i+1:]...)))
 			continue
 		}
 		if i == len(e.es)-1 {
-			result = append(result, mult(mult(e.es[:i]...), e.es[i].Derivative()))
+			result = append(result, mul(mul(e.es[:i]...), e.es[i].Derivative()))
 			continue
 		}
 		result = append(result,
-			mult(
-				mult(e.es[:i]...),
+			mul(
+				mul(e.es[:i]...),
 				e.es[i].Derivative(),
-				mult(e.es[i+1:]...),
+				mul(e.es[i+1:]...),
 			),
 		)
 	}
 	return add(result...)
 }
-
-//func prodRule(e1 Expression, e2 Expression) Expression {
-//	return &ExprsAdded{
-//		expr1: &ExprsMultiplied{[]Expression{e1, e2.Derivative()}},
-//		expr2: &ExprsMultiplied{[]Expression{e2, e1.Derivative()}},
-//	}
-//}
 
 func (e *ExprsMultiplied) String() (str string) {
 	simp := e.simplify()
@@ -158,7 +145,7 @@ func (e *ExprsMultiplied) String() (str string) {
 	return result
 }
 
-func mult(es ...Expression) Expression {
+func mul(es ...Expression) Expression {
 	return &ExprsMultiplied{es}
 }
 
@@ -167,37 +154,16 @@ type ExprsAdded struct {
 }
 
 func (e *ExprsAdded) simplify() Expression {
-	//e.expr1 = e.expr1.simplify()
-	//e.expr2 = e.expr2.simplify()
-	//c1, okc1 := e.expr1.(*Constant)
-	//c2, okc2 := e.expr2.(*Constant)
-	//if okc1 || okc2 {
-	//	var constant *Constant
-	//	var expr Expression
-	//	if okc1 {
-	//		constant = c1
-	//		expr = e.expr2
-	//	} else {
-	//		constant = c2
-	//		expr = e.expr1
-	//	}
-	//	if constant.num == 0 {
-	//		return expr
-	//	}
-	//	if okc1 && okc2 {
-	//		return &Constant{c1.num + c2.num}
-	//	}
-	//}
-	//return e
+	if len(e.es) == 1 {
+		return e.es[0].simplify()
+	}
 	merged := make([]Expression, 0, len(e.es))
 	// combine constants
 	constant := 0.0
-	changed := false
 	constCount := 0
 	newTerms := 0
 	for _, expr := range e.es {
 		if add2, ok := expr.(*ExprsAdded); ok {
-			changed = true
 			// simplify the merged expressions
 			for i, expr2 := range add2.es {
 				add2.es[i] = expr2.simplify()
@@ -222,29 +188,11 @@ func (e *ExprsAdded) simplify() Expression {
 	if len(noConsts) == 0 {
 		return num(constant)
 	}
-	if constCount > 1 {
-		changed = true
-	}
-	if len(e.es) > 0 {
-		if c, ok := e.es[0].(*Constant); !ok { // if the first element is not a constant
-			if constCount != 0 { // if there are constants
-				changed = true // we changed the order of the constants
-			}
-		} else {
-			// if the first element is a constant and is 1 then a change has been made
-			if c.num == 0 {
-				changed = true
-			}
-		}
-	}
 	if constant != 0.0 {
 		noConsts = append([]Expression{&Constant{constant}}, noConsts...)
 	}
-	if changed {
-		return &ExprsAdded{noConsts}
-	} else {
-		return e
-	}
+	e.es = noConsts
+	return e
 }
 
 func (e *ExprsAdded) Derivative() Expression {
@@ -334,7 +282,7 @@ func (e *ExprsSubtracted) simplify() Expression {
 		}
 		if okc1 {
 			if c1.num == 0 {
-				return mult(num(-1), e.expr2)
+				return mul(num(-1), e.expr2)
 			}
 		}
 		if okc2 {
@@ -403,8 +351,8 @@ func (e *ExprsDivided) Derivative() Expression {
 	}
 	return &ExprsDivided{
 		high: &ExprsSubtracted{
-			expr1: mult(e.low, e.high.Derivative()),
-			expr2: mult(e.high, e.low.Derivative()),
+			expr1: mul(e.low, e.high.Derivative()),
+			expr2: mul(e.high, e.low.Derivative()),
 		},
 		low: poly(map[float64]float64{2: 1}, e.low),
 	}
@@ -449,7 +397,7 @@ func (p *Polynomial) simplify() Expression {
 				return num(coeff)
 			}
 			if power == 1 {
-				return mult(num(coeff), p.inside)
+				return mul(num(coeff), p.inside)
 			}
 		}
 	}
@@ -479,7 +427,7 @@ func (p *Polynomial) Derivative() Expression {
 				return num(0)
 			}
 			if power == 1 {
-				return mult(num(coeff), p.inside.Derivative())
+				return mul(num(coeff), p.inside.Derivative())
 			}
 		}
 	}
@@ -489,7 +437,7 @@ func (p *Polynomial) Derivative() Expression {
 			derivative.powerToCoeff[power-1] = power * coeff
 		}
 	}
-	return mult(derivative, p.inside.Derivative())
+	return mul(derivative, p.inside.Derivative())
 }
 
 func (p *Polynomial) String() (str string) {
@@ -565,7 +513,6 @@ func polyParse(ps string, inside Expression) *Polynomial {
 		}
 		var err error
 		split := strings.Split(term, "x")
-		fmt.Println(split)
 		coeffStr := strings.TrimSpace(split[0])
 		powerStr := ""
 		if len(split) > 1 {
@@ -598,6 +545,11 @@ func (l *Log) simplify() Expression {
 	//if c, ok := l.expr.(*Constant); ok {
 	//	return &Constant{math.Log(c.num) / math.Log(l.base)}
 	//}
+	if e, ok := l.expr.(*Exponential); ok {
+		if e.base == l.base {
+			return e.power
+		}
+	}
 	return l
 }
 
@@ -615,7 +567,7 @@ func (l *Log) Derivative() Expression {
 
 	return div(
 		l.expr.Derivative(),
-		mult(
+		mul(
 			l.expr,
 			&Log{E, &Constant{l.base}},
 		),
@@ -628,12 +580,13 @@ func (l *Log) String() string {
 		return simp.String()
 	}
 	insideStr := l.expr.String()
-	if _, ok := l.expr.(*Polynomial); !ok {
-		if _, ok := l.expr.(*Constant); ok {
-			insideStr = "(" + insideStr + ")"
-		} else {
-			insideStr = "[ " + insideStr + " ]"
-		}
+	switch l.expr.(type) {
+	case *ExprsAdded, *ExprsSubtracted, *Polynomial:
+
+	case *Constant:
+		insideStr = "(" + insideStr + ")"
+	default:
+		insideStr = "[ " + insideStr + " ]"
 	}
 	if l.base == E {
 		return "ln" + insideStr
@@ -653,6 +606,11 @@ func (e *Exponential) simplify() Expression {
 	if c, ok := e.power.(*Constant); ok {
 		return &Constant{math.Pow(e.base, c.num)}
 	}
+	if l, ok := e.power.(*Log); ok {
+		if l.base == e.base {
+			return l.expr
+		}
+	}
 	return e
 }
 
@@ -662,12 +620,12 @@ func (e *Exponential) Derivative() Expression {
 		return simp.Derivative()
 	}
 	if e.base == E {
-		return mult(
+		return mul(
 			exp(E, e.power),
 			e.power.Derivative(),
 		)
 	}
-	return mult(
+	return mul(
 		log(E, num(e.base)),
 		exp(e.base, e.power),
 		e.power.Derivative(),
@@ -690,21 +648,6 @@ func (e *Exponential) String() string {
 }
 
 func exp(base float64, power Expression) *Exponential { return &Exponential{base, power} }
-
-func main() {
-	p := add(
-		x(),
-		exp(E, x()),
-		mult(num(2), log(2, y())),
-		//poly(map[float64]float64{2: 3, 1: 2, 0: 1}, x()),
-		polyParse("3x^2 + 12x + 144 + 4x^3 + 2x", x()),
-	)
-
-	fmt.Println(p)
-	fmt.Println(p.Derivative())
-	fmt.Println(p.Derivative().Derivative())
-	fmt.Println(p.Derivative().Derivative().Derivative())
-}
 
 func ftoa(f float64) string {
 	return strconv.FormatFloat(f, 'f', -1, 64)
@@ -735,52 +678,42 @@ func ftoa(f float64) string {
 //	return nil, nil, false
 //}
 
-func legible(e string) {
-	// example: (3 + x^5) / (3x^-1 + x^5) + 3(3 + x^0.5 + x)^-20
-	// get the maximum depth of the expression
+func legible(e Expression) {
+	str := e.String()
 
-	maxdepth := 0
-	currdepth := 0
-	for _, c := range e {
-		if c == '(' {
-			currdepth++
+	colors := []string{
+		//"\033[31m",
+		"\033[32m",
+		"\033[33m",
+		"\033[34m",
+		//"\033[48,5,208m",
+		//"\x1b[38;5;214m",
+		"\033[35m",
+		"\033[36m",
+		"\033[37m",
+		//"\033[91m",
+		//"\033[92m",
+		//"\033[93m",
+	}
+	//slices.Reverse(colors)
+	result := "\033[0m" + colors[0]
+	depth := 0
+	for _, c := range str {
+		// get depth
+		if c == '(' || c == '[' {
+			depth++
 		}
-		if c == ')' {
-			currdepth--
+		if c == ')' || c == ']' {
+			depth--
 		}
-		if currdepth > maxdepth {
-			maxdepth = currdepth
+		if c == '(' || c == '[' {
+			result += colors[depth%len(colors)]
+		}
+		result += string(c)
+		if c == ')' || c == ']' {
+			result += colors[depth%len(colors)]
 		}
 	}
-	//fmt.Println("maxdepth", maxdepth)
-
-	// iterate through th expression agaib, this time adding spaces depending on the depth
-	currdepth = 0
-	newstr := ""
-	for i, c := range e {
-		if c == '(' {
-			currdepth++
-		}
-		if c == ')' {
-			currdepth--
-		}
-		//fmt.Print(currdepth)
-
-		if currdepth == 0 || currdepth == 1 {
-			if (c == '+' || c == '-') && e[i+1] == ' ' {
-				newstr += "\n"
-			} else {
-
-			}
-		}
-		newstr += string(c)
-
-		//if c == '+' || c == '-' && e[i+1] == ' ' { // || c == '*' || c == '/'
-		//	newstr += strings.Repeat(" ", (maxdepth-currdepth)) + string(c) + strings.Repeat(" ", (maxdepth-currdepth))
-		//} else {
-		//	newstr += string(c)
-		//}
-	}
-	//fmt.Println()
-	fmt.Println(newstr)
+	result += "\033[0m"
+	fmt.Println(result)
 }
