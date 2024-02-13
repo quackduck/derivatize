@@ -20,7 +20,16 @@ func main() {
 	//p := div(num(1), log(E, mul(x(), add(x(), x()))))
 
 	// x ln x - ln y
-	p := subtract(mul(x(), log(E, x())), log(E, add(y(), y().Derivative())))
+	//p := subtract(mul(x(), log(E, x())), log(E, add(y(), y().Derivative())))
+
+	// 1 / sqrt(x^2 + 1)
+	//p := div(num(1), add(polyParse("x^0.5", polyParse("x^2 + 1", x())), polyParse("x^0.5", polyParse("x^2 + 1", y()))))
+
+	// x / ln(x)
+	p := div(x(), log(E, x()))
+
+	// 1 / ln(x+y)
+	//p := div(num(1), log(E, add(x(), y())))
 
 	// test combining polys and vars
 	//p := add(
@@ -172,19 +181,22 @@ func mulPolysAndVars(es []Expression) []Expression {
 			//rest = append(rest, p)
 			continue
 		}
+		newPowerToCoeff := make(map[float64]float64, len(p.powerToCoeff))
 		for power := range p.powerToCoeff {
 			if isX {
-				p.powerToCoeff[power] += float64(len(xs))
+				//p.powerToCoeff[power] += float64(len(xs))
+				newPowerToCoeff[power+float64(len(xs))] = p.powerToCoeff[power]
 				//fmt.Println("added to x", power, coeff)
 			} else if isY {
-				p.powerToCoeff[power] += float64(len(xs))
+				//p.powerToCoeff[power] += float64(len(xs))
+				newPowerToCoeff[power+float64(len(ys))] = p.powerToCoeff[power]
 				//fmt.Println("added to y", power, coeff)
 			}
 		}
+		p.powerToCoeff = newPowerToCoeff
 		xdone = xdone || isX
 		ydone = ydone || isY
 		if xdone && ydone {
-
 			break
 		}
 	}
@@ -317,14 +329,15 @@ func (e *ExprsAdded) simplify() Expression {
 		}
 	}
 
+	noConsts = addPolysAndVars(noConsts)
+
 	if len(noConsts) == 0 {
 		return num(constant)
 	}
 	if constant != 0.0 {
 		noConsts = append([]Expression{&Constant{constant}}, noConsts...)
 	}
-	e.es = addPolysAndVars(noConsts)
-	// e.es = noConsts
+	e.es = noConsts
 	return e
 }
 
@@ -769,8 +782,12 @@ func (l *Log) String() string {
 	}
 	insideStr := l.expr.String()
 	switch l.expr.(type) {
-	case *ExprsAdded, *ExprsSubtracted, *Polynomial:
+	case *ExprsAdded, *ExprsSubtracted:
 
+	case *Polynomial:
+		if insideStr[0] != '(' {
+			insideStr = "(" + insideStr + ")"
+		}
 	case *Constant:
 		insideStr = "(" + insideStr + ")"
 	default:
@@ -792,7 +809,9 @@ type Exponential struct {
 func (e *Exponential) simplify() Expression {
 	e.power = e.power.simplify()
 	if c, ok := e.power.(*Constant); ok {
-		return &Constant{math.Pow(e.base, c.num)}
+		if e.base != E {
+			return &Constant{math.Pow(e.base, c.num)}
+		}
 	}
 	if l, ok := e.power.(*Log); ok {
 		if l.base == e.base {
