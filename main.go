@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	"math"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
 )
 
+// var debug = true
 var debug = false
 
 type Expression interface {
@@ -26,10 +28,20 @@ func main() {
 	//p := div(num(1), add(polyParse("x^0.5", polyParse("x^2 + 1", x())), polyParse("x^0.5", polyParse("x^2 + 1", y()))))
 
 	// x / ln(x)
-	p := div(x(), log(E, x()))
+	//p := div(x(), log(E, x()))
+
+	// (x + y) * e^(2xy)
+	//p := mul(add(x(), y()), exp(E, mul(num(2), x(), y())))
 
 	// 1 / ln(x+y)
-	//p := div(num(1), log(E, add(x(), y())))
+	p := div(num(1), log(E, add(x(), y())))
+
+	//p := exp(E, mul(num(-1), x()))
+
+	//p := mul(
+	//	add(polyParse("1+x", y().Derivative())),
+	//	add(polyParse("1+x", y().Derivative())),
+	//)
 
 	// test combining polys and vars
 	//p := add(
@@ -46,6 +58,10 @@ func main() {
 	legible(p.Derivative())
 	fmt.Print("f''(x) = ")
 	legible(p.Derivative().Derivative())
+
+	//p1 := polyParse("x^2 + 2x + 1", y().Derivative())
+	//p2 := polyParse("x^2 + 2x + 1", y().Derivative())
+	//fmt.Println(p1.Equal(p2))
 
 	//// make a list of expressions to test splitting
 	//es := []Expression{
@@ -98,6 +114,9 @@ func (e *ExprsMultiplied) simplify() Expression {
 	if len(e.es) == 1 {
 		return e.es[0].simplify()
 	}
+	if len(e.es) == 0 {
+		return e
+	}
 	merged := make([]Expression, 0, len(e.es))
 	// combine constants
 	constant := 1.0
@@ -144,6 +163,10 @@ func mulPolysAndVars(es []Expression) []Expression {
 
 	// split into polynomials, x, y and the rest
 	polys, rest := splitByType[*Polynomial](es)
+	//fmt.Println("polys", polys)
+	polys = mulMergePolysWhenEqual(polys)
+	//fmt.Println("polys2", polys)
+
 	var xs []*X
 	xs, rest = splitByType[*X](rest)
 	var ys []*Y
@@ -158,7 +181,10 @@ func mulPolysAndVars(es []Expression) []Expression {
 	}
 
 	if len(xs) == 0 && len(ys) == 0 {
-		return es
+		for _, p := range polys {
+			rest = append(rest, p)
+		}
+		return rest
 	}
 
 	xdone := false
@@ -205,9 +231,6 @@ func mulPolysAndVars(es []Expression) []Expression {
 		rest = append(rest, polys[p])
 	}
 	if !xdone {
-		//for _, x := range xs {
-		//	rest = append(rest, x)
-		//}
 		if len(xs) == 1 {
 			rest = append(rest, x())
 		} else {
@@ -215,9 +238,6 @@ func mulPolysAndVars(es []Expression) []Expression {
 		}
 	}
 	if !ydone {
-		//for _, y := range ys {
-		//	rest = append(rest, y)
-		//}
 		if len(ys) == 1 {
 			rest = append(rest, y())
 		} else {
@@ -225,6 +245,21 @@ func mulPolysAndVars(es []Expression) []Expression {
 		}
 	}
 	return rest
+}
+
+func mulMergePolysWhenEqual(ps []*Polynomial) []*Polynomial {
+	for i, p1 := range ps {
+		for j, p2 := range ps {
+			if i == j {
+				continue
+			}
+			if p1.Equal(p2) {
+				ps[i] = poly(map[float64]float64{2: 1}, p1) // square the powers
+				ps = append(ps[:j], ps[j+1:]...)            // remove p2
+			}
+		}
+	}
+	return ps
 }
 
 // splitByType splits a list of expressions based on an input type. this is a generic function
@@ -265,7 +300,7 @@ func (e *ExprsMultiplied) Derivative() Expression {
 			),
 		)
 	}
-	return add(result...)
+	return add(result...).simplify()
 }
 
 func (e *ExprsMultiplied) String() (str string) {
@@ -301,6 +336,11 @@ func (e *ExprsAdded) simplify() Expression {
 	if len(e.es) == 1 {
 		return e.es[0].simplify()
 	}
+
+	if p, ok := checkIfCanBecomePolynomial(e); ok {
+		return p.simplify()
+	}
+
 	merged := make([]Expression, 0, len(e.es))
 	// combine constants
 	constant := 0.0
@@ -339,6 +379,56 @@ func (e *ExprsAdded) simplify() Expression {
 	}
 	e.es = noConsts
 	return e
+}
+
+func checkIfCanBecomePolynomial(a *ExprsAdded) (*Polynomial, bool) {
+	// check if the expressions are made of just nums and either x's or y's (with same derivnum)
+
+	powerToCoeff := make(map[float64]float64)
+
+	isX := false
+	var x *X
+	isY := false
+	var y *Y
+	for _, expr := range a.es {
+		c, okc := expr.(*Constant)
+		x1, okx := expr.(*X)
+		y1, oky := expr.(*Y)
+		if okc {
+			powerToCoeff[0] += c.num
+			continue
+		}
+		if okx {
+			if isY {
+				return nil, false
+			}
+			isX = true
+			x = x1
+			powerToCoeff[1] += 1
+			continue
+		}
+		if oky {
+			if isX {
+				return nil, false
+			}
+			if y != nil && y.derivnum != y1.derivnum {
+				return nil, false
+			}
+			isY = true
+			y = y1
+			powerToCoeff[1] += 1
+			continue
+		}
+		// TODO: handle polynomials
+		return nil, false
+	}
+	if isX {
+		return poly(powerToCoeff, x), true
+	}
+	if isY {
+		return poly(powerToCoeff, y), true
+	}
+	return nil, false
 }
 
 func addPolysAndVars(es []Expression) []Expression {
@@ -540,6 +630,17 @@ func (e *ExprsDivided) simplify() Expression {
 	if okc1 && okc2 {
 		return &Constant{c1.num / c2.num}
 	}
+	if okc2 {
+		if c2.num == 1 {
+			return e.high
+		}
+		if c2.num == 0 {
+			panic("division by zero")
+		}
+		if c2.num == -1 {
+			return mul(num(-1), e.high)
+		}
+	}
 	if okc1 {
 		//fmt.Println("c1", c1.num)
 		if c1.num == 0 {
@@ -553,6 +654,13 @@ func (e *ExprsDivided) simplify() Expression {
 			return (poly(map[float64]float64{-1: c1.num}, x)).simplify()
 		}
 	}
+
+	// check if the high is ExprsDivided
+	if d, ok := e.high.(*ExprsDivided); ok {
+		// (a/b) / c = a / (b*c)
+		return div(d.high, mul(d.low, e.low)).simplify()
+	}
+
 	return e
 }
 
@@ -699,6 +807,26 @@ func (p *Polynomial) String() (str string) {
 
 func poly(powerToCoeff map[float64]float64, inside Expression) *Polynomial {
 	return &Polynomial{powerToCoeff, inside}
+}
+
+func (p *Polynomial) Equal(p2 *Polynomial) bool {
+
+	return reflect.DeepEqual(p, p2) // hopefully this works
+
+	//switch e := p.inside.(type) {
+	//case *X:
+	//case *Y:
+	//	switch e2 := p2.inside.(type) {
+	//
+	//	}
+	//}
+	//
+	//for power, coeff := range p.powerToCoeff {
+	//	if p2.powerToCoeff[power] != coeff {
+	//		return false
+	//	}
+	//}
+	//return true
 }
 
 func polyParse(ps string, inside Expression) *Polynomial {
@@ -854,6 +982,48 @@ func (e *Exponential) String() string {
 	return ftoa(e.base) + "^" + insideStr
 }
 
+//
+//type Reciprocal struct {
+//	expr Expression
+//}
+//
+//func (r *Reciprocal) simplify() Expression {
+//	r.expr = r.expr.simplify()
+//	//if c, ok := r.expr.(*Constant); ok {
+//	//	if c.num == 0 {
+//	//		panic("division by zero")
+//	//	}
+//	//	return &Constant{1 / c.num}
+//	//}
+//	switch e := r.expr.(type) {
+//	case *Reciprocal:
+//		return e.expr
+//	case *Polynomial:
+//		return poly(map[float64]float64{-1: 1}, e.inside).simplify()
+//	}
+//	return r
+//}
+//
+//func (r *Reciprocal) Derivative() Expression {
+//	simp := r.simplify()
+//	if simp != r {
+//		return simp.Derivative()
+//	}
+//	return poly(map[float64]float64{-2: 1}, r.expr).simplify()
+//}
+//
+//func (r *Reciprocal) String() string {
+//	simp := r.simplify()
+//	if simp != r {
+//		return simp.String()
+//	}
+//	insideStr := r.expr.String()
+//	if _, ok := r.expr.(*Polynomial); !ok {
+//		insideStr = "[ " + insideStr + " ]"
+//	}
+//	return "1 / " + insideStr
+//}
+
 func exp(base float64, power Expression) *Exponential { return &Exponential{base, power} }
 
 func ftoa(f float64) string {
@@ -913,11 +1083,11 @@ func legible(e Expression) {
 		if c == ')' || c == ']' {
 			depth--
 		}
-		if c == '(' || c == '[' {
+		if c == ')' || c == ']' {
 			result += colors[depth%len(colors)]
 		}
 		result += string(c)
-		if c == ')' || c == ']' {
+		if c == '(' || c == '[' {
 			result += colors[depth%len(colors)]
 		}
 	}
