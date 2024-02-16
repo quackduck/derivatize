@@ -602,7 +602,7 @@ func (e *ExprsDivided) simplify() Expression {
 
 	if mul1, ok := e.high.(*ExprsMultiplied); ok {
 		// (a * b) / c = (a * b * 1/c)
-		mul1.es = append(mul1.es, mul(num(1), e.low).simplify())
+		mul1.es = append(mul1.es, div(num(1), e.low).simplify())
 		return mul1.simplify()
 	}
 
