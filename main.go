@@ -38,51 +38,12 @@ func main() {
 
 	//p := exp(E, mul(num(-1), x()))
 
-	//p := mul(
-	//	add(polyParse("1+x", y().Derivative())),
-	//	add(polyParse("1+x", y().Derivative())),
-	//)
-
-	// test combining polys and vars
-	//p := add(
-	//	poly(map[float64]float64{1: 2, 2: 3}, x()),
-	//	poly(map[float64]float64{1: 2, 2: 3}, y()),
-	//	poly(map[float64]float64{1: 2, 2: 3}, x()),
-	//	poly(map[float64]float64{1: 2, 2: 3}, y()),
-	//	x(), x(), x(),
-	//)
-
 	fmt.Print("f(x)   = ")
 	legible(p)
 	fmt.Print("f'(x)  = ")
 	legible(p.Derivative())
 	fmt.Print("f''(x) = ")
 	legible(p.Derivative().Derivative())
-
-	//p1 := polyParse("x^2 + 2x + 1", y().Derivative())
-	//p2 := polyParse("x^2 + 2x + 1", y().Derivative())
-	//fmt.Println(p1.Equal(p2))
-
-	//// make a list of expressions to test splitting
-	//es := []Expression{
-	//	mul(num(1), num(2), num(3)),
-	//	poly(map[float64]float64{1: 2, 2: 3}, x()),
-	//	y(), y(), y(),
-	//	x(), x(), x(),
-	//}
-	//// split the list into polynomials, x, y and the rest
-	//polys, rest := splitByType[*Polynomial](es)
-	//fmt.Println("polys", polys)
-	//var xs []*X
-	//xs, rest = splitByType[*X](rest)
-	//fmt.Println("xs", xs)
-	//var ys []*Y
-	//ys, rest = splitByType[*Y](rest)
-	//fmt.Println("ys", ys)
-	//var muls []*ExprsMultiplied
-	//muls, rest = splitByType[*ExprsMultiplied](rest)
-	//fmt.Println("muls", muls)
-	//fmt.Println("rest", rest)
 }
 
 type Constant struct{ num float64 }
@@ -158,8 +119,7 @@ func (e *ExprsMultiplied) simplify() Expression {
 }
 
 func mulPolysAndVars(es []Expression) []Expression {
-
-	//fmt.Println("es", es)
+	es = mulMergeDivides(es)
 
 	// split into polynomials, x, y and the rest
 	polys, rest := splitByType[*Polynomial](es)
@@ -260,6 +220,20 @@ func mulMergePolysWhenEqual(ps []*Polynomial) []*Polynomial {
 		}
 	}
 	return ps
+}
+
+func mulMergeDivides(es []Expression) []Expression {
+	divs, rest := splitByType[*ExprsDivided](es)
+	if len(divs) == 0 {
+		return es
+	}
+	allhighs := make([]Expression, 0, len(divs))
+	alllows := make([]Expression, 0, len(divs))
+	for i := range divs {
+		allhighs = append(allhighs, divs[i].high)
+		alllows = append(alllows, divs[i].low)
+	}
+	return append(rest, div(mul(allhighs...).simplify(), mul(alllows...).simplify()).simplify())
 }
 
 // splitByType splits a list of expressions based on an input type. this is a generic function
@@ -625,6 +599,13 @@ type ExprsDivided struct {
 func (e *ExprsDivided) simplify() Expression {
 	e.high = e.high.simplify()
 	e.low = e.low.simplify()
+
+	if mul1, ok := e.high.(*ExprsMultiplied); ok {
+		// (a * b) / c = (a * b * 1/c)
+		mul1.es = append(mul1.es, mul(num(1), e.low).simplify())
+		return mul1.simplify()
+	}
+
 	c1, okc1 := e.high.(*Constant)
 	c2, okc2 := e.low.(*Constant)
 	if okc1 && okc2 {
