@@ -33,12 +33,15 @@ func main() {
 
 	// (x^2 - 4) / (x + 2)
 	//p := div(polyParse("x^2 + -4", x()), add(x(), num(2)))
-	
+
 	//fmt.Println(p.structure())
 	//fmt.Println(p.Derivative().structure())
 	//fmt.Println(p.structure())
 
 	//p := polyParse("1", x())
+
+	// (x^2 + x) / x
+	p := div(polyParse("x^2 + x", x()), x())
 
 	//p := div(x(), x())
 
@@ -667,6 +670,18 @@ func (e *ExprsDivided) simplify() (ret Expression) {
 		//fmt.Println("HELLO", mul1.es, e.low)
 		e.low = num(1)
 		return mul1.simplify()
+	}
+
+	if p1, ok := e.high.(*Polynomial); ok {
+		if _, ok = e.low.(*X); ok {
+			newPowerToCoeff := make(map[float64]float64, len(p1.powerToCoeff))
+			for power, coeff := range p1.powerToCoeff {
+				newPowerToCoeff[power-1] = coeff
+			}
+			p1.powerToCoeff = newPowerToCoeff
+			e.low = num(1)
+			return p1.simplify()
+		}
 	}
 
 	c1, okc1 := e.high.(*Constant)
