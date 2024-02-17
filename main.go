@@ -43,7 +43,61 @@ func main() {
 
 	//p := num(1)
 
-	p := randomExpressionGenerator()
+	//p := randomExpressionGenerator()
+
+	// e ^ (ln(x^2))
+	//p := exp(E, log(E, polyParse("x^2", x())))
+
+	//eggholder function
+
+	s1 := polyParse("x^0.5", abs(
+		add(c(), div(b(), num(2)), num(47)),
+	))
+	s2 := polyParse("x^0.5", abs(
+		subtract(b(), add(c(), num(47))),
+	))
+
+	p := subtract(
+		mul(num(-1), add(c(), num(47), sin(s1))),
+		mul(b(), sin(s2)),
+	)
+
+	//s1 := polyParse("x^0.5",
+	//	polyParse("0.5x + 47", x()),
+	//)
+	//s2 := polyParse("x^0.5",
+	//	polyParse("x + -47", x()),
+	//)
+	//
+	//p := subtract(
+	//	mul(num(-47), sin(s1)),
+	//	mul(x(), sin(s2)),
+	//)
+
+	// sqrt(25 - b^2 - c^2)
+	//p := polyParse("x^0.5",
+	//	subtract(
+	//		num(25),
+	//		add(
+	//			polyParse("x^2", b()),
+	//			polyParse("x^2", c()),
+	//		),
+	//	),
+	//)
+
+	//p := mul(num(3), abs(subtract(x(), num(2))))
+
+	//p := mul(num(-47), sin(s1))
+
+	// (sin(x)/cos(x))^2 + e^((1/sin(x))) * log_8(1/cos((3x)^(1/3)))
+
+	//p := add(
+	//	polyParse("x^2", div(sin(x()), cos(x()))),
+	//	mul(
+	//		exp(E, div(num(1), sin(x()))),
+	//		log(8, div(num(1), cos(polyParse("x^0.3333333333333333", mul(num(3), x()))))),
+	//	),
+	//)
 
 	//p := div(x(), x())
 
@@ -66,9 +120,9 @@ func main() {
 	var e Expression
 	e = p
 	for i := 0; i < 10; i++ {
-		//fmt.Println(i)
+		fmt.Println(i)
 		e = e.Derivative()
-		//legible(e)
+		legible(e)
 	}
 	fmt.Print("f(10)(x) = ")
 	legible(e)
@@ -97,6 +151,47 @@ func (y *Y) String() string         { return "y" + strings.Repeat("'", y.derivnu
 func (y *Y) simplify() Expression   { return y }
 func y() Expression                 { return &Y{} }
 func (y *Y) structure() string      { return "y{}" }
+
+type B struct{}
+
+func (b *B) Derivative() Expression { return &Constant{1} }
+func (b *B) String() string         { return "b" }
+func (b *B) simplify() Expression   { return b }
+func b() Expression                 { return &B{} }
+func (b *B) structure() string      { return "b{}" }
+
+type C struct{}
+
+func (c *C) Derivative() Expression { return &Constant{0} }
+func (c *C) String() string         { return "c" }
+func (c *C) simplify() Expression   { return c }
+func c() Expression                 { return &C{} }
+func (c *C) structure() string      { return "c{}" }
+
+type Abs struct {
+	inside Expression
+}
+
+func (a *Abs) Derivative() Expression {
+	return mul(div(a.inside, abs(a.inside)), a.inside.Derivative())
+}
+
+func (a *Abs) String() string {
+	return "|" + a.inside.String() + "|"
+}
+
+func (a *Abs) simplify() Expression {
+	a.inside = a.inside.simplify()
+	return a
+}
+
+func abs(e Expression) Expression {
+	return &Abs{e}
+}
+
+func (a *Abs) structure() string {
+	return "abs{" + a.inside.structure() + "}"
+}
 
 type ExprsMultiplied struct {
 	es []Expression
@@ -1136,9 +1231,9 @@ func (s *Sin) String() string {
 		return simp.String()
 	}
 	insideStr := s.expr.String()
-	if _, ok := s.expr.(*Polynomial); !ok {
-		insideStr = "[ " + insideStr + " ]"
-	}
+	//if _, ok := s.expr.(*Polynomial); !ok {
+	insideStr = "[ " + insideStr + " ]"
+	//}
 	return "sin" + insideStr
 }
 
@@ -1171,9 +1266,9 @@ func (c *Cos) String() string {
 		return simp.String()
 	}
 	insideStr := c.expr.String()
-	if _, ok := c.expr.(*Polynomial); !ok {
-		insideStr = "[ " + insideStr + " ]"
-	}
+	//if _, ok := c.expr.(*Polynomial); !ok {
+	insideStr = "[ " + insideStr + " ]"
+	//}
 	return "cos" + insideStr
 }
 
