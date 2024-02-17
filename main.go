@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"math/rand"
 	"reflect"
 	"slices"
 	"strconv"
@@ -40,8 +41,9 @@ func main() {
 
 	//p := polyParse("1", x())
 
-	// (x^2 + x) / x
-	p := div(polyParse("x^2 + x", x()), x())
+	//p := num(1)
+
+	p := randomExpressionGenerator()
 
 	//p := div(x(), x())
 
@@ -64,9 +66,9 @@ func main() {
 	var e Expression
 	e = p
 	for i := 0; i < 10; i++ {
-		fmt.Println(i)
+		//fmt.Println(i)
 		e = e.Derivative()
-		legible(e)
+		//legible(e)
 	}
 	fmt.Print("f(10)(x) = ")
 	legible(e)
@@ -85,7 +87,7 @@ type X struct{}
 func (x *X) Derivative() Expression { return &Constant{1} }
 func (x *X) String() string         { return "x" }
 func (x *X) simplify() Expression   { return x }
-func x() *X                         { return &X{} }
+func x() Expression                 { return &X{} }
 func (x *X) structure() string      { return "x{}" }
 
 type Y struct{ derivnum int }
@@ -93,7 +95,7 @@ type Y struct{ derivnum int }
 func (y *Y) Derivative() Expression { return &Y{y.derivnum + 1} }
 func (y *Y) String() string         { return "y" + strings.Repeat("'", y.derivnum) }
 func (y *Y) simplify() Expression   { return y }
-func y() *Y                         { return &Y{} }
+func y() Expression                 { return &Y{} }
 func (y *Y) structure() string      { return "y{}" }
 
 type ExprsMultiplied struct {
@@ -1111,6 +1113,76 @@ func (e *Exponential) structure() string {
 	return "exp_" + ftoa(e.base) + "{" + e.power.structure() + "}"
 }
 
+type Sin struct {
+	expr Expression
+}
+
+func (s *Sin) simplify() Expression {
+	s.expr = s.expr.simplify()
+	return s
+}
+
+func (s *Sin) Derivative() Expression {
+	simp := s.simplify()
+	if simp != s {
+		return simp.Derivative()
+	}
+	return mul(cos(s.expr), s.expr.Derivative())
+}
+
+func (s *Sin) String() string {
+	simp := s.simplify()
+	if simp != s {
+		return simp.String()
+	}
+	insideStr := s.expr.String()
+	if _, ok := s.expr.(*Polynomial); !ok {
+		insideStr = "[ " + insideStr + " ]"
+	}
+	return "sin" + insideStr
+}
+
+func sin(expr Expression) *Sin { return &Sin{expr} }
+
+func (s *Sin) structure() string {
+	return "sin{" + s.expr.structure() + "}"
+}
+
+type Cos struct {
+	expr Expression
+}
+
+func (c *Cos) simplify() Expression {
+	c.expr = c.expr.simplify()
+	return c
+}
+
+func (c *Cos) Derivative() Expression {
+	simp := c.simplify()
+	if simp != c {
+		return simp.Derivative()
+	}
+	return mul(num(-1), sin(c.expr), c.expr.Derivative())
+}
+
+func (c *Cos) String() string {
+	simp := c.simplify()
+	if simp != c {
+		return simp.String()
+	}
+	insideStr := c.expr.String()
+	if _, ok := c.expr.(*Polynomial); !ok {
+		insideStr = "[ " + insideStr + " ]"
+	}
+	return "cos" + insideStr
+}
+
+func cos(expr Expression) *Cos { return &Cos{expr} }
+
+func (c *Cos) structure() string {
+	return "cos{" + c.expr.structure() + "}"
+}
+
 func ftoa(f float64) string {
 	return strconv.FormatFloat(f, 'f', -1, 64)
 }
@@ -1178,4 +1250,55 @@ func legible(e Expression) {
 	}
 	result += "\033[0m"
 	fmt.Println(result)
+}
+
+func randomExpressionGenerator() Expression {
+	funcs2input := []func(Expression, Expression) Expression{
+		subtract,
+		div,
+	}
+	vars := []func() Expression{
+		x,
+		//y,
+	}
+	funcsNinput := []func(...Expression) Expression{
+		add,
+		mul,
+	}
+	funcsCustom := []func() Expression{
+		func() Expression { return log(E, randomExpressionGenerator()) },
+		func() Expression { return exp(E, randomExpressionGenerator()) },
+		func() Expression { return sin(randomExpressionGenerator()) },
+		func() Expression { return cos(randomExpressionGenerator()) },
+		func() Expression {
+			// random polynomial
+			powerToCoeff := make(map[float64]float64)
+			numTerms := rand.Intn(3) + 1
+			for i := 0; i < numTerms; i++ {
+				powerToCoeff[float64(rand.Intn(14)-7)] = float64(rand.Intn(14) - 7)
+			}
+			return poly(powerToCoeff, x())
+		},
+	}
+
+	// generate a random expression
+	// 3 lists so pick a random one
+	r := rand.Float64()
+	weights := []float64{0.25, 0.25, 0.15, 0.35}
+	if r < weights[0] {
+		return funcs2input[rand.Intn(len(funcs2input))](randomExpressionGenerator(), randomExpressionGenerator())
+	}
+	if r < weights[0]+weights[1] {
+		return vars[rand.Intn(len(vars))]()
+	}
+	if r < weights[0]+weights[1]+weights[2] {
+		// pick a random number of inputs
+		numInputs := rand.Intn(1) + 2
+		inputs := make([]Expression, numInputs)
+		for i := range inputs {
+			inputs[i] = randomExpressionGenerator()
+		}
+		return funcsNinput[rand.Intn(len(funcsNinput))](inputs...)
+	}
+	return funcsCustom[rand.Intn(len(funcsCustom))]()
 }
