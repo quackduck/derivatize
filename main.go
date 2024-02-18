@@ -10,9 +10,9 @@ import (
 	"strings"
 )
 
-var debug = false
+//var debug = true
 
-//var debug = false
+var debug = false
 
 type Expression interface {
 	Derivative() Expression
@@ -50,29 +50,33 @@ func main() {
 
 	//eggholder function
 
-	s1 := polyParse("x^0.5", abs(
-		add(c(), div(b(), num(2)), num(47)),
-	))
-	s2 := polyParse("x^0.5", abs(
-		subtract(b(), add(c(), num(47))),
-	))
-
-	p := subtract(
-		mul(num(-1), add(c(), num(47), sin(s1))),
-		mul(b(), sin(s2)),
-	)
-
-	//s1 := polyParse("x^0.5",
-	//	polyParse("0.5x + 47", x()),
-	//)
-	//s2 := polyParse("x^0.5",
-	//	polyParse("x + -47", x()),
-	//)
+	//s1 := polyParse("x^0.5", abs(
+	//	add(c(), div(b(), num(2)), num(47)),
+	//))
+	//s2 := polyParse("x^0.5", abs(
+	//	subtract(b(), add(c(), num(47))),
+	//))
 	//
 	//p := subtract(
-	//	mul(num(-47), sin(s1)),
-	//	mul(x(), sin(s2)),
+	//	mul(num(-1), add(c(), num(47), sin(s1))),
+	//	mul(b(), sin(s2)),
 	//)
+
+	//p := sin(cos(x()))
+
+	//p := sin(cos(x()))
+
+	s1 := polyParse("x^0.5",
+		polyParse("0.5x + 47", x()),
+	)
+	s2 := polyParse("x^0.5",
+		polyParse("x + -47", x()),
+	)
+
+	p := subtract(
+		mul(num(-47), sin(s1)),
+		mul(x(), sin(s2)),
+	)
 
 	// sqrt(25 - b^2 - c^2)
 	//p := polyParse("x^0.5",
@@ -109,23 +113,36 @@ func main() {
 
 	//p := exp(E, mul(num(-1), x()))
 
-	fmt.Print("f(x)   = ")
-	legible(p)
-	fmt.Print("f'(x)  = ")
-	legible(p.Derivative())
-	fmt.Print("f''(x) = ")
-	legible(p.Derivative().Derivative())
+	//fmt.Print("f(x)   = ")
+	//legible(p)
+	//fmt.Print("f'(x)  = ")
+	//legible(p.Derivative())
+	//fmt.Print("f''(x) = ")
+	//legible(p.Derivative().Derivative())
 
-	return
+	//return
+
+	//f, err := os.Create("derivatize.prof")
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
+	//pprof.StartCPUProfile(f)
+	//defer pprof.StopCPUProfile()
+
 	var e Expression
 	e = p
-	for i := 0; i < 10; i++ {
-		fmt.Println(i)
-		e = e.Derivative()
-		legible(e)
-	}
-	fmt.Print("f(10)(x) = ")
+	fmt.Println("f(x)")
 	legible(e)
+	for i := 0; i < 4; i++ {
+		fmt.Println(i+1, "th derivative:")
+		e = e.Derivative().simplify().simplify()
+		legible(e)
+		//fmt.Println(e.structure())
+		//fmt.Println(e.simplify().structure())
+	}
+	//fmt.Print("f(10)(x) = ")
+	//legible(e)
 }
 
 type Constant struct{ num float64 }
@@ -204,6 +221,7 @@ func (e *ExprsMultiplied) simplify() (ret Expression) {
 	if len(e.es) == 0 {
 		return e
 	}
+	e.es = mergeBasedOnReflect(e.es, true)
 	merged := make([]Expression, 0, len(e.es))
 	// combine constants
 	constant := 1.0
@@ -229,6 +247,7 @@ func (e *ExprsMultiplied) simplify() (ret Expression) {
 				return &Constant{0}
 			}
 			constant *= c.num
+			// TODO: if constants are too big, don't multiply them
 			constCount++
 		} else {
 			noConsts = append(noConsts, expr)
@@ -251,7 +270,6 @@ func mulPolysAndVars(es []Expression, c *Constant) (rest []Expression) {
 	// split into polynomials, x, y and the rest
 	var polys []*Polynomial
 	polys, rest = splitByType[*Polynomial](es)
-	polys = mulMergePolysWhenEqual(polys)
 
 	if len(polys) != 0 && c.num != 1.0 {
 		for power, coeff := range polys[0].powerToCoeff {
@@ -343,23 +361,6 @@ func mulPolysAndVars(es []Expression, c *Constant) (rest []Expression) {
 	return rest
 }
 
-func mulMergePolysWhenEqual(ps []*Polynomial) []*Polynomial {
-	for i := 0; i < len(ps); i++ {
-		for j := i + 1; j < len(ps); j++ {
-			//if i == j {
-			//	continue
-			//}
-			if ps[i].Equal(ps[j]) {
-				ps[i] = poly(map[float64]float64{2: 1}, ps[i]) // square the powers
-				ps = append(ps[:j], ps[j+1:]...)               // remove p2
-				// no need to decrement i because i < j and the j'th element got removed
-				j--
-			}
-		}
-	}
-	return ps
-}
-
 func mulMergeDivides(es []Expression) []Expression {
 	divs, rest := splitByType[*ExprsDivided](es)
 	if len(divs) == 0 {
@@ -412,6 +413,9 @@ func (e *ExprsMultiplied) Derivative() Expression {
 			),
 		)
 	}
+	if len(result) == 1 {
+		return result[0]
+	}
 	return add(result...).simplify()
 }
 
@@ -425,15 +429,16 @@ func (e *ExprsMultiplied) String() (str string) {
 			str = "mult[" + str + "]"
 		}()
 	}
-	result := ""
+	result := strings.Builder{}
 	for i, expr := range e.es {
 		if i == 0 {
-			result += expr.String()
+			result.WriteString(expr.String())
 		} else {
-			result += " * " + expr.String()
+			result.WriteString(" * ")
+			result.WriteString(expr.String())
 		}
 	}
-	return result
+	return result.String()
 }
 
 func mul(es ...Expression) Expression {
@@ -456,7 +461,7 @@ func (e *ExprsAdded) simplify() Expression {
 	if len(e.es) == 1 {
 		return e.es[0].simplify()
 	}
-
+	e.es = mergeBasedOnReflect(e.es, false)
 	if p, ok := checkIfCanBecomePolynomial(e); ok {
 		return p.simplify()
 	}
@@ -499,6 +504,74 @@ func (e *ExprsAdded) simplify() Expression {
 	}
 	e.es = noConsts
 	return e
+}
+
+// mul or add
+func mergeBasedOnReflect(es []Expression, ismul bool) []Expression {
+
+	// get all polys to the front
+	polys, rest := splitByType[*Polynomial](es)
+	for _, p := range polys {
+		rest = append(rest, p)
+	}
+	slices.Reverse(rest)
+
+	exprMap := make(map[Expression]int)
+	for i := 0; i < len(es); i++ {
+		exprMap[es[i]] = 1
+		for j := i + 1; j < len(es); j++ {
+			if reflect.DeepEqual(es[i], es[j]) {
+				exprMap[es[i]]++
+				es = append(es[:j], es[j+1:]...)
+				j--
+			}
+			_, oki := es[i].(*Polynomial) // TODO: handle case where j is a poly. // TODO: do all this after the tally
+			_, okj := es[j].(*Polynomial)
+			if oki || okj {
+				var poly *Polynomial
+				var other Expression
+
+				if oki {
+				} else {
+					continue
+					// we'll swap i and j so that i is the polynomial and we don't have to think about whether i or j needs to decrement later
+					es[i], es[j] = es[j], es[i]
+				}
+				poly = es[i].(*Polynomial)
+				other = es[j]
+
+				if reflect.DeepEqual(poly.inside, other) {
+					if ismul {
+						newPowerToCoeff := make(map[float64]float64, len(poly.powerToCoeff))
+						for power, coeff := range poly.powerToCoeff {
+							newPowerToCoeff[power+1] = coeff
+						}
+						poly.powerToCoeff = newPowerToCoeff
+					} else { // addition
+						poly.powerToCoeff[1]++
+					}
+					es = append(es[:j], es[j+1:]...)
+					j--
+				}
+				if !oki {
+					es[i], es[j] = es[j], es[i] // swap back
+				}
+			}
+		}
+	}
+	newEs := make([]Expression, 0, len(exprMap))
+	for expr, count := range exprMap {
+		if count == 1 {
+			newEs = append(newEs, expr)
+		} else if count > 1 {
+			if ismul {
+				newEs = append(newEs, poly(map[float64]float64{float64(count): 1}, expr))
+			} else { // addition
+				newEs = append(newEs, mul(num(float64(count)), expr))
+			}
+		}
+	}
+	return newEs
 }
 
 func checkIfCanBecomePolynomial(a *ExprsAdded) (*Polynomial, bool) {
@@ -666,15 +739,18 @@ func (e *ExprsAdded) String() (str string) {
 			str = "add[" + str + "]"
 		}()
 	}
-	result := ""
+	result := strings.Builder{}
+	result.WriteRune('(')
 	for i, expr := range e.es {
 		if i == 0 {
-			result += expr.String()
+			result.WriteString(expr.String())
 		} else {
-			result += " + " + expr.String()
+			result.WriteString(" + ")
+			result.WriteString(expr.String())
 		}
 	}
-	return "(" + result + ")"
+	result.WriteRune(')')
+	return result.String()
 }
 
 func add(es ...Expression) Expression {
@@ -1232,7 +1308,7 @@ func (s *Sin) String() string {
 	}
 	insideStr := s.expr.String()
 	//if _, ok := s.expr.(*Polynomial); !ok {
-	insideStr = "[ " + insideStr + " ]"
+	insideStr = "[" + insideStr + "]"
 	//}
 	return "sin" + insideStr
 }
@@ -1267,7 +1343,7 @@ func (c *Cos) String() string {
 	}
 	insideStr := c.expr.String()
 	//if _, ok := c.expr.(*Polynomial); !ok {
-	insideStr = "[ " + insideStr + " ]"
+	insideStr = "[" + insideStr + "]"
 	//}
 	return "cos" + insideStr
 }
