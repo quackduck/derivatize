@@ -84,6 +84,7 @@ func (p *Polynomial) String() (str string) {
 		if coeff == 0 {
 			continue
 		}
+
 		coeffStr := ""
 		if coeff == -1 {
 			coeffStr = "-"

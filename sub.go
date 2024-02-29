@@ -48,7 +48,11 @@ func (e *ExprsSubtracted) String() (str string) {
 	}
 	expr1str := e.expr1.String()
 	switch e.expr1.(type) {
-	case *ExprsAdded, *ExprsSubtracted, *Polynomial:
+	case *Polynomial:
+		if expr1str[0] == '(' {
+			expr1str = expr1str[1 : len(expr1str)-1]
+		}
+	case *ExprsAdded, *ExprsSubtracted:
 		expr1str = expr1str[1 : len(expr1str)-1]
 	}
 	return "(" + expr1str + " - " + e.expr2.String() + ")"

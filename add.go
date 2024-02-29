@@ -63,56 +63,6 @@ func (e *ExprsAdded) simplify() Expression {
 	return e
 }
 
-//func checkIfCanBecomePolynomial(a *ExprsAdded) (*Polynomial, bool) {
-//	// check if the expressions are made of just nums and either x's or y's (with same derivnum)
-//	fmt.Println("HELLO")
-//	return nil, false
-//	powerToCoeff := make(map[float64]float64)
-//
-//	isX := false
-//	var x *X
-//	isY := false
-//	var y *Y
-//	for _, expr := range a.es {
-//		c, okc := expr.(*Constant)
-//		x1, okx := expr.(*X)
-//		y1, oky := expr.(*Y)
-//		if okc {
-//			powerToCoeff[0] += c.num
-//			continue
-//		}
-//		if okx {
-//			if isY {
-//				return nil, false
-//			}
-//			isX = true
-//			x = x1
-//			powerToCoeff[1] += 1
-//			continue
-//		}
-//		if oky {
-//			if isX {
-//				return nil, false
-//			}
-//			if y != nil && y.derivnum != y1.derivnum {
-//				return nil, false
-//			}
-//			isY = true
-//			y = y1
-//			powerToCoeff[1] += 1
-//			continue
-//		}
-//		return nil, false
-//	}
-//	if isX {
-//		return poly(powerToCoeff, x), true
-//	}
-//	if isY {
-//		return poly(powerToCoeff, y), true
-//	}
-//	return nil, false
-//}
-
 func addPolysAndVars(es []Expression) []Expression {
 	// split into polynomials, x, y and the rest
 	polys, rest := splitByType[*Polynomial](es)
