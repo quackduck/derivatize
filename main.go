@@ -20,14 +20,29 @@ type Expression interface {
 func main() {
 
 	// ln(x + y)
-	p := log(E, add(x(), y()))
+	//p := add(x(), polyParse("x^2 + 2x + 1", x()))
+
+	//p := randomExpressionGenerator()
+
+	// ln(x) - x
+	p := subtract(log(E, x()), x())
+	//p := mul(x(), x(), polyParse("x^2 + 2x + 1", x()), polyParse("x^2 + 2x + 1", x()))
 
 	fmt.Print("f(x)   = ")
 	legible(p)
+	//fmt.Println(p.structure())
+	//fmt.Println(p.simplify().structure())
 	fmt.Print("f'(x)  = ")
 	legible(p.Derivative())
+	fmt.Println(p.Derivative().structure())
 	fmt.Print("f''(x) = ")
 	legible(p.Derivative().Derivative())
+
+	//d := p.Derivative().Derivative()
+	//fmt.Println(d.structure())
+	//fmt.Println(d.structure())
+	//fmt.Println(d.structure())
+	//fmt.Println(d.simplify().structure())
 
 	//return
 

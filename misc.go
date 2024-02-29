@@ -1,6 +1,10 @@
 package main
 
-import "math"
+import (
+	"math"
+	"reflect"
+	"slices"
+)
 
 type Abs struct {
 	inside Expression
@@ -156,4 +160,114 @@ func exp(base float64, power Expression) *Exponential { return &Exponential{base
 
 func (e *Exponential) structure() string {
 	return "exp_" + ftoa(e.base) + "{" + e.power.structure() + "}"
+}
+
+// mul or add
+func mergeBasedOnReflect(es []Expression, ismul bool) []Expression {
+
+	//for i := 0; i < len(es); i++ {
+	//	fmt.Println("i", i, es[i].structure())
+	//}
+
+	// get all polys to the front
+	polys, rest := splitByType[*Polynomial](es)
+	for _, p := range polys {
+		rest = append(rest, p)
+	}
+	slices.Reverse(rest)
+
+	es = rest
+
+	exprMap := make(map[Expression]int)
+	for i := 0; i < len(es); i++ {
+		exprMap[es[i]] = 1
+		for j := i + 1; j < len(es); j++ {
+
+			_, oki := es[i].(*Polynomial) // TODO: handle case where j is a poly. // TODO: do all this after the tally
+			_, okj := es[j].(*Polynomial)
+			if oki && okj {
+				//es, j = mergePolys(es, ismul, i, j)
+				p1 := es[i].(*Polynomial)
+				p2 := es[j].(*Polynomial)
+				changed := mergePolys(p1, p2, ismul)
+				if changed { // es[i] has been modified
+					es = append(es[:j], es[j+1:]...)
+					j--
+					continue
+				}
+			}
+
+			if oki || okj {
+				var poly *Polynomial
+				var other Expression
+
+				if oki {
+				} else {
+					continue // ignore this case for now. the janky fix is to always start with the polys first
+					// we'll swap i and j so that i is the polynomial and we don't have to think about whether i or j needs to decrement later
+					es[i], es[j] = es[j], es[i]
+				}
+				poly = es[i].(*Polynomial)
+				other = es[j]
+
+				if reflect.DeepEqual(poly.inside, other) {
+					if ismul {
+						newPowerToCoeff := make(map[float64]float64, len(poly.powerToCoeff))
+						for power, coeff := range poly.powerToCoeff {
+							newPowerToCoeff[power+1] = coeff
+						}
+						poly.powerToCoeff = newPowerToCoeff
+					} else { // addition
+						poly.powerToCoeff[1]++
+					}
+					es = append(es[:j], es[j+1:]...)
+					j--
+				}
+				if !oki {
+					es[i], es[j] = es[j], es[i] // swap back
+				}
+				continue
+			}
+
+			if reflect.DeepEqual(es[i], es[j]) {
+				exprMap[es[i]]++
+				es = append(es[:j], es[j+1:]...)
+				j--
+				continue
+			}
+		}
+	}
+	newEs := make([]Expression, 0, len(exprMap))
+	for expr, count := range exprMap {
+		if count == 1 {
+			newEs = append(newEs, expr)
+		} else if count > 1 {
+			if ismul {
+				newEs = append(newEs, poly(map[float64]float64{float64(count): 1}, expr))
+			} else { // addition
+				newEs = append(newEs, mul(num(float64(count)), expr))
+			}
+		}
+	}
+	return newEs
+}
+
+// caution: edits p1 based on p2
+func mergePolys(p1 *Polynomial, p2 *Polynomial, ismul bool) (changed bool) {
+	if ismul {
+		return false // don't multiply the polys together
+	}
+	if reflect.DeepEqual(p1.inside, p2.inside) {
+		// addition
+		newPowerToCoeff := make(map[float64]float64, len(p1.powerToCoeff)+len(p2.powerToCoeff))
+		for power, coeff := range p1.powerToCoeff {
+			newPowerToCoeff[power] = coeff
+		}
+		for power, coeff := range p2.powerToCoeff {
+			newPowerToCoeff[power] += coeff
+		}
+		p1.powerToCoeff = newPowerToCoeff
+		return true
+	}
+	return false
 }

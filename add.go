@@ -1,8 +1,6 @@
 package main
 
 import (
-	"reflect"
-	"slices"
 	"strings"
 )
 
@@ -14,10 +12,16 @@ func (e *ExprsAdded) simplify() Expression {
 	if len(e.es) == 1 {
 		return e.es[0].simplify()
 	}
+	//fmt.Println("simplifying add", e.structure())
 	e.es = mergeBasedOnReflect(e.es, false)
-	if p, ok := checkIfCanBecomePolynomial(e); ok {
-		return p.simplify()
+	//fmt.Println("simplifying add", e.structure())
+	if len(e.es) == 1 {
+		//fmt.Println("whew...")
+		return e.es[0].simplify()
 	}
+	//if p, ok := checkIfCanBecomePolynomial(e); ok {
+	//	return p.simplify()
+	//}
 
 	merged := make([]Expression, 0, len(e.es))
 	// combine constants
@@ -59,123 +63,55 @@ func (e *ExprsAdded) simplify() Expression {
 	return e
 }
 
-// mul or add
-func mergeBasedOnReflect(es []Expression, ismul bool) []Expression {
-
-	// get all polys to the front
-	polys, rest := splitByType[*Polynomial](es)
-	for _, p := range polys {
-		rest = append(rest, p)
-	}
-	slices.Reverse(rest)
-
-	exprMap := make(map[Expression]int)
-	for i := 0; i < len(es); i++ {
-		exprMap[es[i]] = 1
-		for j := i + 1; j < len(es); j++ {
-			if reflect.DeepEqual(es[i], es[j]) {
-				exprMap[es[i]]++
-				es = append(es[:j], es[j+1:]...)
-				j--
-			}
-			_, oki := es[i].(*Polynomial) // TODO: handle case where j is a poly. // TODO: do all this after the tally
-			_, okj := es[j].(*Polynomial)
-			if oki || okj {
-				var poly *Polynomial
-				var other Expression
-
-				if oki {
-				} else {
-					continue
-					// we'll swap i and j so that i is the polynomial and we don't have to think about whether i or j needs to decrement later
-					es[i], es[j] = es[j], es[i]
-				}
-				poly = es[i].(*Polynomial)
-				other = es[j]
-
-				if reflect.DeepEqual(poly.inside, other) {
-					if ismul {
-						newPowerToCoeff := make(map[float64]float64, len(poly.powerToCoeff))
-						for power, coeff := range poly.powerToCoeff {
-							newPowerToCoeff[power+1] = coeff
-						}
-						poly.powerToCoeff = newPowerToCoeff
-					} else { // addition
-						poly.powerToCoeff[1]++
-					}
-					es = append(es[:j], es[j+1:]...)
-					j--
-				}
-				if !oki {
-					es[i], es[j] = es[j], es[i] // swap back
-				}
-			}
-		}
-	}
-	newEs := make([]Expression, 0, len(exprMap))
-	for expr, count := range exprMap {
-		if count == 1 {
-			newEs = append(newEs, expr)
-		} else if count > 1 {
-			if ismul {
-				newEs = append(newEs, poly(map[float64]float64{float64(count): 1}, expr))
-			} else { // addition
-				newEs = append(newEs, mul(num(float64(count)), expr))
-			}
-		}
-	}
-	return newEs
-}
-
-func checkIfCanBecomePolynomial(a *ExprsAdded) (*Polynomial, bool) {
-	// check if the expressions are made of just nums and either x's or y's (with same derivnum)
-
-	powerToCoeff := make(map[float64]float64)
-
-	isX := false
-	var x *X
-	isY := false
-	var y *Y
-	for _, expr := range a.es {
-		c, okc := expr.(*Constant)
-		x1, okx := expr.(*X)
-		y1, oky := expr.(*Y)
-		if okc {
-			powerToCoeff[0] += c.num
-			continue
-		}
-		if okx {
-			if isY {
-				return nil, false
-			}
-			isX = true
-			x = x1
-			powerToCoeff[1] += 1
-			continue
-		}
-		if oky {
-			if isX {
-				return nil, false
-			}
-			if y != nil && y.derivnum != y1.derivnum {
-				return nil, false
-			}
-			isY = true
-			y = y1
-			powerToCoeff[1] += 1
-			continue
-		}
-		// TODO: merge polynomials?
-		return nil, false
-	}
-	if isX {
-		return poly(powerToCoeff, x), true
-	}
-	if isY {
-		return poly(powerToCoeff, y), true
-	}
-	return nil, false
-}
+//func checkIfCanBecomePolynomial(a *ExprsAdded) (*Polynomial, bool) {
+//	// check if the expressions are made of just nums and either x's or y's (with same derivnum)
+//	fmt.Println("HELLO")
+//	return nil, false
+//	powerToCoeff := make(map[float64]float64)
+//
+//	isX := false
+//	var x *X
+//	isY := false
+//	var y *Y
+//	for _, expr := range a.es {
+//		c, okc := expr.(*Constant)
+//		x1, okx := expr.(*X)
+//		y1, oky := expr.(*Y)
+//		if okc {
+//			powerToCoeff[0] += c.num
+//			continue
+//		}
+//		if okx {
+//			if isY {
+//				return nil, false
+//			}
+//			isX = true
+//			x = x1
+//			powerToCoeff[1] += 1
+//			continue
+//		}
+//		if oky {
+//			if isX {
+//				return nil, false
+//			}
+//			if y != nil && y.derivnum != y1.derivnum {
+//				return nil, false
+//			}
+//			isY = true
+//			y = y1
+//			powerToCoeff[1] += 1
+//			continue
+//		}
+//		return nil, false
+//	}
+//	if isX {
+//		return poly(powerToCoeff, x), true
+//	}
+//	if isY {
+//		return poly(powerToCoeff, y), true
+//	}
+//	return nil, false
+//}
 
 func addPolysAndVars(es []Expression) []Expression {
 	// split into polynomials, x, y and the rest

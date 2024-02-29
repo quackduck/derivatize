@@ -13,7 +13,7 @@ func (e *ExprsMultiplied) simplify() (ret Expression) {
 	if len(e.es) == 0 {
 		return e
 	}
-	e.es = mergeBasedOnReflect(e.es, true)
+
 	merged := make([]Expression, 0, len(e.es))
 	// combine constants
 	constant := 1.0
@@ -32,6 +32,11 @@ func (e *ExprsMultiplied) simplify() (ret Expression) {
 		}
 	}
 
+	merged = mergeBasedOnReflect(merged, true)
+	if len(e.es) == 1 {
+		return e.es[0].simplify()
+	}
+
 	noConsts := make([]Expression, 0, len(merged))
 	for _, expr := range merged {
 		if c, ok := expr.(*Constant); ok {
@@ -48,110 +53,111 @@ func (e *ExprsMultiplied) simplify() (ret Expression) {
 	if len(noConsts) == 0 {
 		return num(constant)
 	}
-	noConsts = mulPolysAndVars(noConsts, &Constant{constant})
-	//if constant != 1.0 {
-	//	noConsts = append([]Expression{&Constant{constant}}, noConsts...)
-	//}
+	//noConsts = mulPolysAndVars(noConsts, &Constant{constant})
+	noConsts = mulMergeDivides(noConsts)
+	if constant != 1.0 {
+		noConsts = append([]Expression{&Constant{constant}}, noConsts...)
+	}
 	e.es = noConsts
 	return e
 }
 
-func mulPolysAndVars(es []Expression, c *Constant) (rest []Expression) {
-	es = mulMergeDivides(es)
-
-	// split into polynomials, x, y and the rest
-	var polys []*Polynomial
-	polys, rest = splitByType[*Polynomial](es)
-
-	if len(polys) != 0 && c.num != 1.0 {
-		for power, coeff := range polys[0].powerToCoeff {
-			polys[0].powerToCoeff[power] = coeff * c.num
-		}
-	} else if len(polys) == 0 && c.num != 1.0 {
-		defer func() {
-			rest = append([]Expression{c}, rest...)
-		}()
-	}
-
-	var xs []*X
-	xs, rest = splitByType[*X](rest)
-	var ys []*Y
-	ys, rest = splitByType[*Y](rest)
-
-	for i := 0; i < len(ys); i++ {
-		if ys[i].derivnum != 0 {
-			rest = append(rest, ys[i])
-			ys = append(ys[:i], ys[i+1:]...)
-			i--
-		}
-	}
-
-	if len(xs) == 0 && len(ys) == 0 {
-		for _, p := range polys {
-			rest = append(rest, p)
-		}
-		return rest
-	}
-
-	xdone := false
-	ydone := false
-
-	if len(xs) == 0 {
-		xdone = true
-	}
-	if len(ys) == 0 {
-		ydone = true
-	}
-
-	for _, p := range polys {
-		_, isX := p.inside.(*X)
-		yin, isY := p.inside.(*Y)
-		if isY && yin.derivnum != 0 {
-			isY = false // ignore y' y'' etc for now at least
-		}
-		if !isX && !isY {
-			//rest = append(rest, p)
-			continue
-		}
-		newPowerToCoeff := make(map[float64]float64, len(p.powerToCoeff))
-		for power := range p.powerToCoeff {
-			if isX {
-				//p.powerToCoeff[power] += float64(len(xs))
-				newPowerToCoeff[power+float64(len(xs))] = p.powerToCoeff[power]
-				//fmt.Println("added to x", power, coeff)
-			} else if isY {
-				//p.powerToCoeff[power] += float64(len(xs))
-				newPowerToCoeff[power+float64(len(ys))] = p.powerToCoeff[power]
-				//fmt.Println("added to y", power, coeff)
-			}
-		}
-		p.powerToCoeff = newPowerToCoeff
-		xdone = xdone || isX
-		ydone = ydone || isY
-		if xdone && ydone {
-			break
-		}
-	}
-	//rest = append(rest, polys...)
-	if !xdone {
-		if len(xs) == 1 {
-			rest = append(rest, x())
-		} else {
-			rest = append(rest, poly(map[float64]float64{float64(len(xs)): 1}, x()))
-		}
-	}
-	if !ydone {
-		if len(ys) == 1 {
-			rest = append(rest, y())
-		} else {
-			rest = append(rest, poly(map[float64]float64{float64(len(ys)): 1}, y()))
-		}
-	}
-	for i := range polys {
-		rest = append(rest, polys[i])
-	}
-	return rest
-}
+//func mulPolysAndVars(es []Expression, c *Constant) (rest []Expression) {
+//	es = mulMergeDivides(es)
+//
+//	// split into polynomials, x, y and the rest
+//	var polys []*Polynomial
+//	polys, rest = splitByType[*Polynomial](es)
+//
+//	if len(polys) != 0 && c.num != 1.0 {
+//		for power, coeff := range polys[0].powerToCoeff {
+//			polys[0].powerToCoeff[power] = coeff * c.num
+//		}
+//	} else if len(polys) == 0 && c.num != 1.0 {
+//		defer func() {
+//			rest = append([]Expression{c}, rest...)
+//		}()
+//	}
+//
+//	var xs []*X
+//	xs, rest = splitByType[*X](rest)
+//	var ys []*Y
+//	ys, rest = splitByType[*Y](rest)
+//
+//	for i := 0; i < len(ys); i++ {
+//		if ys[i].derivnum != 0 {
+//			rest = append(rest, ys[i])
+//			ys = append(ys[:i], ys[i+1:]...)
+//			i--
+//		}
+//	}
+//
+//	if len(xs) == 0 && len(ys) == 0 {
+//		for _, p := range polys {
+//			rest = append(rest, p)
+//		}
+//		return rest
+//	}
+//
+//	xdone := false
+//	ydone := false
+//
+//	if len(xs) == 0 {
+//		xdone = true
+//	}
+//	if len(ys) == 0 {
+//		ydone = true
+//	}
+//
+//	for _, p := range polys {
+//		_, isX := p.inside.(*X)
+//		yin, isY := p.inside.(*Y)
+//		if isY && yin.derivnum != 0 {
+//			isY = false // ignore y' y'' etc for now at least
+//		}
+//		if !isX && !isY {
+//			//rest = append(rest, p)
+//			continue
+//		}
+//		newPowerToCoeff := make(map[float64]float64, len(p.powerToCoeff))
+//		for power := range p.powerToCoeff {
+//			if isX {
+//				//p.powerToCoeff[power] += float64(len(xs))
+//				newPowerToCoeff[power+float64(len(xs))] = p.powerToCoeff[power]
+//				//fmt.Println("added to x", power, coeff)
+//			} else if isY {
+//				//p.powerToCoeff[power] += float64(len(xs))
+//				newPowerToCoeff[power+float64(len(ys))] = p.powerToCoeff[power]
+//				//fmt.Println("added to y", power, coeff)
+//			}
+//		}
+//		p.powerToCoeff = newPowerToCoeff
+//		xdone = xdone || isX
+//		ydone = ydone || isY
+//		if xdone && ydone {
+//			break
+//		}
+//	}
+//	//rest = append(rest, polys...)
+//	if !xdone {
+//		if len(xs) == 1 {
+//			rest = append(rest, x())
+//		} else {
+//			rest = append(rest, poly(map[float64]float64{float64(len(xs)): 1}, x()))
+//		}
+//	}
+//	if !ydone {
+//		if len(ys) == 1 {
+//			rest = append(rest, y())
+//		} else {
+//			rest = append(rest, poly(map[float64]float64{float64(len(ys)): 1}, y()))
+//		}
+//	}
+//	for i := range polys {
+//		rest = append(rest, polys[i])
+//	}
+//	return rest
+//}
 
 func mulMergeDivides(es []Expression) []Expression {
 	divs, rest := splitByType[*ExprsDivided](es)
@@ -239,8 +245,12 @@ func mul(es ...Expression) Expression {
 
 func (e *ExprsMultiplied) structure() string {
 	result := ""
-	for _, expr := range e.es {
-		result += expr.structure() + " * "
+	for i, expr := range e.es {
+		if i == 0 {
+			result += expr.structure()
+			continue
+		}
+		result += " * " + expr.structure()
 	}
-	return "mul{" + result[:len(result)-3] + "}"
+	return "mul{" + result + "}"
 }
