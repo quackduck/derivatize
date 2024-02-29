@@ -21,8 +21,12 @@ func (p *Polynomial) simplify() Expression {
 				return num(coeff)
 			}
 			if power == 1 {
+				if coeff == 1 {
+					return p.inside
+				}
 				return mul(num(coeff), p.inside)
 			}
+			//return mul(num(coeff), poly(map[float64]float64{power: 1}, p.inside)) // allows for some kinds of simplification
 		}
 	}
 	if polyn, ok := p.inside.(*Polynomial); ok {

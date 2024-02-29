@@ -25,8 +25,11 @@ func main() {
 	//p := randomExpressionGenerator()
 
 	// ln(x) - x
-	p := subtract(log(E, x()), x())
+	//p := subtract(log(E, x()), x())
 	//p := mul(x(), x(), polyParse("x^2 + 2x + 1", x()), polyParse("x^2 + 2x + 1", x()))
+
+	// 3x^2 + ln(x) + (cos(x))^2
+	p := add(mul(num(3), x(), x()), log(E, x()), polyParse("x^2", cos(x())))
 
 	fmt.Print("f(x)   = ")
 	legible(p)
@@ -34,7 +37,7 @@ func main() {
 	//fmt.Println(p.simplify().structure())
 	fmt.Print("f'(x)  = ")
 	legible(p.Derivative())
-	fmt.Println(p.Derivative().structure())
+	//fmt.Println(p.Derivative().structure())
 	fmt.Print("f''(x) = ")
 	legible(p.Derivative().Derivative())
 

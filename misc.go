@@ -81,7 +81,7 @@ func (l *Log) String() string {
 		if insideStr[0] != '(' {
 			insideStr = "(" + insideStr + ")"
 		}
-	case *Constant:
+	case *Constant, *X:
 		insideStr = "(" + insideStr + ")"
 	default:
 		insideStr = "[ " + insideStr + " ]"
@@ -163,6 +163,7 @@ func (e *Exponential) structure() string {
 }
 
 // mul or add
+// caution: edits elements within es. Need to change that.
 func mergeBasedOnReflect(es []Expression, ismul bool) []Expression {
 
 	//for i := 0; i < len(es); i++ {
@@ -180,7 +181,7 @@ func mergeBasedOnReflect(es []Expression, ismul bool) []Expression {
 
 	exprMap := make(map[Expression]int)
 	for i := 0; i < len(es); i++ {
-		exprMap[es[i]] = 1
+		exprMap[es[i]] += 1
 		for j := i + 1; j < len(es); j++ {
 
 			_, oki := es[i].(*Polynomial) // TODO: handle case where j is a poly. // TODO: do all this after the tally
@@ -189,6 +190,7 @@ func mergeBasedOnReflect(es []Expression, ismul bool) []Expression {
 				//es, j = mergePolys(es, ismul, i, j)
 				p1 := es[i].(*Polynomial)
 				p2 := es[j].(*Polynomial)
+
 				changed := mergePolys(p1, p2, ismul)
 				if changed { // es[i] has been modified
 					es = append(es[:j], es[j+1:]...)
@@ -197,16 +199,9 @@ func mergeBasedOnReflect(es []Expression, ismul bool) []Expression {
 				}
 			}
 
-			if oki || okj {
+			if oki {
 				var poly *Polynomial
 				var other Expression
-
-				if oki {
-				} else {
-					continue // ignore this case for now. the janky fix is to always start with the polys first
-					// we'll swap i and j so that i is the polynomial and we don't have to think about whether i or j needs to decrement later
-					es[i], es[j] = es[j], es[i]
-				}
 				poly = es[i].(*Polynomial)
 				other = es[j]
 
@@ -222,11 +217,8 @@ func mergeBasedOnReflect(es []Expression, ismul bool) []Expression {
 					}
 					es = append(es[:j], es[j+1:]...)
 					j--
+					continue
 				}
-				if !oki {
-					es[i], es[j] = es[j], es[i] // swap back
-				}
-				continue
 			}
 
 			if reflect.DeepEqual(es[i], es[j]) {

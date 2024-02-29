@@ -53,7 +53,6 @@ func (e *ExprsMultiplied) simplify() (ret Expression) {
 	if len(noConsts) == 0 {
 		return num(constant)
 	}
-	//noConsts = mulPolysAndVars(noConsts, &Constant{constant})
 	noConsts = mulMergeDivides(noConsts)
 	if constant != 1.0 {
 		noConsts = append([]Expression{&Constant{constant}}, noConsts...)

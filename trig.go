@@ -23,9 +23,17 @@ func (s *Sin) String() string {
 		return simp.String()
 	}
 	insideStr := s.expr.String()
-	//if _, ok := s.expr.(*Polynomial); !ok {
-	insideStr = "[" + insideStr + "]"
-	//}
+
+	switch s.expr.(type) {
+	case *Polynomial:
+		if insideStr[0] != '(' {
+			insideStr = "(" + insideStr + ")"
+		}
+	case *Constant, *X:
+		insideStr = "(" + insideStr + ")"
+	default:
+		insideStr = "[ " + insideStr + " ]"
+	}
 	return "sin" + insideStr
 }
 
@@ -58,9 +66,16 @@ func (c *Cos) String() string {
 		return simp.String()
 	}
 	insideStr := c.expr.String()
-	//if _, ok := c.expr.(*Polynomial); !ok {
-	insideStr = "[" + insideStr + "]"
-	//}
+	switch c.expr.(type) {
+	case *Polynomial:
+		if insideStr[0] != '(' {
+			insideStr = "(" + insideStr + ")"
+		}
+	case *Constant, *X:
+		insideStr = "(" + insideStr + ")"
+	default:
+		insideStr = "[ " + insideStr + " ]"
+	}
 	return "cos" + insideStr
 }
 
