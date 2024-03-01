@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
 	"strconv"
 )
 
@@ -29,7 +28,15 @@ func main() {
 	//p := mul(x(), x(), polyParse("x^2 + 2x + 1", x()), polyParse("x^2 + 2x + 1", x()))
 
 	// 3x^2 + ln(x) + (cos(x))^2
-	p := add(mul(num(3), x(), x()), log(E, x()), polyParse("x^2", cos(x())))
+
+	x := &Var{name: "x", wrt: true}
+	y := &Var{name: "y"}
+	z := &Var{name: "z"}
+
+	p := add(mul(num(3), y, x), log(E, mul(num(3), mul(num(3), z, x))), polyParse("x^2", cos(x)))
+
+	// x^2 + y^2 + z^2
+	//p := mul(polyParse("x^2", x), polyParse("x^2", y), polyParse("x^2", z))
 
 	fmt.Print("f(x)   = ")
 	legible(p)
@@ -47,7 +54,7 @@ func main() {
 	//fmt.Println(d.structure())
 	//fmt.Println(d.simplify().structure())
 
-	//return
+	return
 
 	//f, err := os.Create("derivatize.prof")
 	//if err != nil {
@@ -57,17 +64,17 @@ func main() {
 	//pprof.StartCPUProfile(f)
 	//defer pprof.StopCPUProfile()
 
-	//var e Expression
-	//e = p
-	//fmt.Println("f(x)")
-	//legible(e)
-	//for i := 0; i < 4; i++ {
-	//	fmt.Println(i+1, "th derivative:")
-	//	e = e.Derivative().simplify().simplify().simplify().simplify()
-	//	legible(e)
-	//	//fmt.Println(e.structure())
-	//	//fmt.Println(e.simplify().structure())
-	//}
+	var e Expression
+	e = p
+	fmt.Println("f(x)")
+	legible(e)
+	for i := 0; i < 10; i++ {
+		fmt.Println(i+1, "th derivative:")
+		e = e.Derivative().simplify().simplify().simplify().simplify()
+		legible(e)
+		//fmt.Println(e.structure())
+		//fmt.Println(e.simplify().structure())
+	}
 	//fmt.Print("f(10)(x) = ")
 	//legible(e)
 }
@@ -116,53 +123,53 @@ func legible(e Expression) {
 	fmt.Println(result)
 }
 
-func randomExpressionGenerator() Expression {
-	funcs2input := []func(Expression, Expression) Expression{
-		subtract,
-		div,
-	}
-	vars := []func() Expression{
-		x,
-		//y,
-	}
-	funcsNinput := []func(...Expression) Expression{
-		add,
-		mul,
-	}
-	funcsCustom := []func() Expression{
-		func() Expression { return log(E, randomExpressionGenerator()) },
-		func() Expression { return exp(E, randomExpressionGenerator()) },
-		func() Expression { return sin(randomExpressionGenerator()) },
-		func() Expression { return cos(randomExpressionGenerator()) },
-		func() Expression {
-			// random polynomial
-			powerToCoeff := make(map[float64]float64)
-			numTerms := rand.Intn(3) + 1
-			for i := 0; i < numTerms; i++ {
-				powerToCoeff[float64(rand.Intn(14)-7)] = float64(rand.Intn(14) - 7)
-			}
-			return poly(powerToCoeff, x())
-		},
-	}
-
-	// generate a random expression
-	// 3 lists so pick a random one
-	r := rand.Float64()
-	weights := []float64{0.25, 0.25, 0.15, 0.35}
-	if r < weights[0] {
-		return funcs2input[rand.Intn(len(funcs2input))](randomExpressionGenerator(), randomExpressionGenerator())
-	}
-	if r < weights[0]+weights[1] {
-		return vars[rand.Intn(len(vars))]()
-	}
-	if r < weights[0]+weights[1]+weights[2] {
-		// pick a random number of inputs
-		numInputs := rand.Intn(1) + 2
-		inputs := make([]Expression, numInputs)
-		for i := range inputs {
-			inputs[i] = randomExpressionGenerator()
-		}
-		return funcsNinput[rand.Intn(len(funcsNinput))](inputs...)
-	}
-	return funcsCustom[rand.Intn(len(funcsCustom))]()
-}
+//func randomExpressionGenerator() Expression {
+//	funcs2input := []func(Expression, Expression) Expression{
+//		subtract,
+//		div,
+//	}
+//	vars := []func() Expression{
+//		x,
+//		//y,
+//	}
+//	funcsNinput := []func(...Expression) Expression{
+//		add,
+//		mul,
+//	}
+//	funcsCustom := []func() Expression{
+//		func() Expression { return log(E, randomExpressionGenerator()) },
+//		func() Expression { return exp(E, randomExpressionGenerator()) },
+//		func() Expression { return sin(randomExpressionGenerator()) },
+//		func() Expression { return cos(randomExpressionGenerator()) },
+//		func() Expression {
+//			// random polynomial
+//			powerToCoeff := make(map[float64]float64)
+//			numTerms := rand.Intn(3) + 1
+//			for i := 0; i < numTerms; i++ {
+//				powerToCoeff[float64(rand.Intn(14)-7)] = float64(rand.Intn(14) - 7)
+//			}
+//			return poly(powerToCoeff, x())
+//		},
+//	}
+//
+//	// generate a random expression
+//	// 3 lists so pick a random one
+//	r := rand.Float64()
+//	weights := []float64{0.25, 0.25, 0.15, 0.35}
+//	if r < weights[0] {
+//		return funcs2input[rand.Intn(len(funcs2input))](randomExpressionGenerator(), randomExpressionGenerator())
+//	}
+//	if r < weights[0]+weights[1] {
+//		return vars[rand.Intn(len(vars))]()
+//	}
+//	if r < weights[0]+weights[1]+weights[2] {
+//		// pick a random number of inputs
+//		numInputs := rand.Intn(1) + 2
+//		inputs := make([]Expression, numInputs)
+//		for i := range inputs {
+//			inputs[i] = randomExpressionGenerator()
+//		}
+//		return funcsNinput[rand.Intn(len(funcsNinput))](inputs...)
+//	}
+//	return funcsCustom[rand.Intn(len(funcsCustom))]()
+//}

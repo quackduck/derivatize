@@ -1,5 +1,7 @@
 package main
 
+import "reflect"
+
 type ExprsDivided struct {
 	high Expression
 	low  Expression
@@ -21,14 +23,16 @@ func (e *ExprsDivided) simplify() (ret Expression) {
 	}
 
 	if p1, ok := e.high.(*Polynomial); ok {
-		if _, ok = e.low.(*X); ok {
-			newPowerToCoeff := make(map[float64]float64, len(p1.powerToCoeff))
-			for power, coeff := range p1.powerToCoeff {
-				newPowerToCoeff[power-1] = coeff
+		if v, ok := e.low.(*Var); ok {
+			if pv, ok := p1.inside.(*Var); ok && reflect.DeepEqual(pv, v) {
+				newPowerToCoeff := make(map[float64]float64, len(p1.powerToCoeff))
+				for power, coeff := range p1.powerToCoeff {
+					newPowerToCoeff[power-1] = coeff
+				}
+				p1.powerToCoeff = newPowerToCoeff
+				e.low = num(1)
+				return p1.simplify()
 			}
-			p1.powerToCoeff = newPowerToCoeff
-			e.low = num(1)
-			return p1.simplify()
 		}
 	}
 
@@ -57,8 +61,8 @@ func (e *ExprsDivided) simplify() (ret Expression) {
 		if polyn, ok := e.low.(*Polynomial); ok { // constant divided by polynomial
 			return (poly(map[float64]float64{-1: c1.num}, polyn)).simplify()
 		}
-		if x, ok := e.low.(*X); ok {
-			return (poly(map[float64]float64{-1: c1.num}, x)).simplify()
+		if v, ok := e.low.(*Var); ok {
+			return (poly(map[float64]float64{-1: c1.num}, v)).simplify()
 		}
 	}
 

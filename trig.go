@@ -29,7 +29,7 @@ func (s *Sin) String() string {
 		if insideStr[0] != '(' {
 			insideStr = "(" + insideStr + ")"
 		}
-	case *Constant, *X:
+	case *Constant, *Var:
 		insideStr = "(" + insideStr + ")"
 	default:
 		insideStr = "[ " + insideStr + " ]"
@@ -71,7 +71,7 @@ func (c *Cos) String() string {
 		if insideStr[0] != '(' {
 			insideStr = "(" + insideStr + ")"
 		}
-	case *Constant, *X:
+	case *Constant, *Var:
 		insideStr = "(" + insideStr + ")"
 	default:
 		insideStr = "[ " + insideStr + " ]"

@@ -32,11 +32,6 @@ func (e *ExprsMultiplied) simplify() (ret Expression) {
 		}
 	}
 
-	merged = mergeBasedOnReflect(merged, true)
-	if len(e.es) == 1 {
-		return e.es[0].simplify()
-	}
-
 	noConsts := make([]Expression, 0, len(merged))
 	for _, expr := range merged {
 		if c, ok := expr.(*Constant); ok {
@@ -53,6 +48,12 @@ func (e *ExprsMultiplied) simplify() (ret Expression) {
 	if len(noConsts) == 0 {
 		return num(constant)
 	}
+
+	noConsts = mergeBasedOnReflect(noConsts, true)
+	if len(e.es) == 1 {
+		return e.es[0].simplify()
+	}
+
 	noConsts = mulMergeDivides(noConsts)
 	if constant != 1.0 {
 		noConsts = append([]Expression{&Constant{constant}}, noConsts...)

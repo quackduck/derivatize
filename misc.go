@@ -81,7 +81,7 @@ func (l *Log) String() string {
 		if insideStr[0] != '(' {
 			insideStr = "(" + insideStr + ")"
 		}
-	case *Constant, *X:
+	case *Constant, *Var:
 		insideStr = "(" + insideStr + ")"
 	default:
 		insideStr = "[ " + insideStr + " ]"
@@ -146,7 +146,7 @@ func (e *Exponential) String() string {
 	//	insideStr = "[ " + insideStr + " ]"
 	//}
 	switch e.power.(type) {
-	case *ExprsAdded, *ExprsSubtracted, *X:
+	case *ExprsAdded, *ExprsSubtracted, *Var:
 	case *Polynomial:
 		insideStr = "[ " + insideStr + " ]"
 	}
