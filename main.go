@@ -30,16 +30,21 @@ func main() {
 	// 3x^2 + ln(x) + (cos(x))^2
 
 	x := &Var{name: "x", wrt: true}
-	y := &Var{name: "y"}
-	z := &Var{name: "z"}
+	//y := &Var{name: "y"}
+	//z := &Var{name: "z"}
 
-	p := add(mul(num(3), y, x), log(E, mul(num(3), mul(num(3), z, x))), polyParse("x^2", cos(x)))
+	//p := add(mul(num(3), y, x), log(E, mul(num(3), mul(num(3), z, x))), polyParse("x^2", cos(x)))
 
 	// x^2 + y^2 + z^2
 	//p := mul(polyParse("x^2", x), polyParse("x^2", y), polyParse("x^2", z))
 
+	m1 := mul(x, num(3))
+
+	legible(m1)
+	p := div(m1, m1)
 	fmt.Print("f(x)   = ")
 	legible(p)
+	legible(m1)
 	//fmt.Println(p.structure())
 	//fmt.Println(p.simplify().structure())
 	fmt.Print("f'(x)  = ")

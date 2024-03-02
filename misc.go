@@ -164,11 +164,10 @@ func (e *Exponential) structure() string {
 
 // mul or add
 // caution: edits elements within es. Need to change that.
-func mergeBasedOnReflect(es []Expression, ismul bool) []Expression {
+func mergeBasedOnReflect(exprs []Expression, ismul bool) []Expression {
 
-	//for i := 0; i < len(es); i++ {
-	//	fmt.Println("i", i, es[i].structure())
-	//}
+	es := make([]Expression, len(exprs))
+	copy(es, exprs) // copy to avoid editing the original
 
 	// get all polys to the front
 	polys, rest := splitByType[*Polynomial](es)
@@ -191,8 +190,9 @@ func mergeBasedOnReflect(es []Expression, ismul bool) []Expression {
 				p1 := es[i].(*Polynomial)
 				p2 := es[j].(*Polynomial)
 
-				changed := mergePolys(p1, p2, ismul)
-				if changed { // es[i] has been modified
+				newp, changed := mergePolys(p1, p2, ismul)
+				if changed {
+					es[i] = newp
 					es = append(es[:j], es[j+1:]...)
 					j--
 					continue
@@ -244,11 +244,11 @@ func mergeBasedOnReflect(es []Expression, ismul bool) []Expression {
 	return newEs
 }
 
-// caution: edits p1 based on p2
-func mergePolys(p1 *Polynomial, p2 *Polynomial, ismul bool) (changed bool) {
+func mergePolys(p1 *Polynomial, p2 *Polynomial, ismul bool) (newPoly *Polynomial, changed bool) {
 	if ismul {
-		return false // don't multiply the polys together
+		return nil, false // don't multiply the polys together
 	}
+
 	if reflect.DeepEqual(p1.inside, p2.inside) {
 		// addition
 		newPowerToCoeff := make(map[float64]float64, len(p1.powerToCoeff)+len(p2.powerToCoeff))
@@ -258,8 +258,7 @@ func mergePolys(p1 *Polynomial, p2 *Polynomial, ismul bool) (changed bool) {
 		for power, coeff := range p2.powerToCoeff {
 			newPowerToCoeff[power] += coeff
 		}
-		p1.powerToCoeff = newPowerToCoeff
-		return true
+		return poly(newPowerToCoeff, p1.inside), true
 	}
-	return false
+	return nil, false
 }

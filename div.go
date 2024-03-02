@@ -83,34 +83,39 @@ func (e *ExprsDivided) simplify() (ret Expression) {
 	return e
 }
 
-// caution: edits high and low
 func removeCommonMul(high *ExprsMultiplied, low *ExprsMultiplied) (Expression, Expression) {
-	for i := 0; i < len(high.es); i++ {
-		for j := 0; j < len(low.es) && i >= 0; j++ {
-			if reflect.DeepEqual(high.es[i], low.es[j]) {
-				high.es = append(high.es[:i], high.es[i+1:]...)
-				low.es = append(low.es[:j], low.es[j+1:]...)
+	newhigh := make([]Expression, len(high.es))
+	newlow := make([]Expression, len(low.es))
+
+	copy(newhigh, high.es) // copy to avoid editing the original
+	copy(newlow, low.es)
+
+	for i := 0; i < len(newhigh); i++ {
+		for j := 0; j < len(newlow) && i >= 0; j++ {
+			if reflect.DeepEqual(newhigh[i], newlow[j]) {
+				newhigh = append(newhigh[:i], newhigh[i+1:]...)
+				newlow = append(newlow[:j], newlow[j+1:]...)
 				i--
 				j--
 			}
 		}
 	}
 	var r1 Expression
-	switch len(high.es) {
+	switch len(newhigh) {
 	case 0:
 		r1 = num(1)
 	case 1:
-		r1 = high.es[0]
+		r1 = newhigh[0]
 	default:
-		r1 = high
+		r1 = mul(newhigh...)
 	}
-	switch len(low.es) {
+	switch len(newlow) {
 	case 0:
 		return r1, num(1)
 	case 1:
-		return r1, low.es[0]
+		return r1, newlow[0]
 	default:
-		return r1, low
+		return r1, mul(newlow...)
 	}
 }
 
