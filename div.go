@@ -1,15 +1,24 @@
 package main
 
-import "reflect"
+import (
+	"reflect"
+)
 
 type ExprsDivided struct {
 	high Expression
 	low  Expression
 }
 
+// may edit things within it
 func (e *ExprsDivided) simplify() (ret Expression) {
 	e.high = e.high.simplify()
 	e.low = e.low.simplify()
+
+	m1, okm1 := e.high.(*ExprsMultiplied)
+	m2, okm2 := e.low.(*ExprsMultiplied)
+	if okm1 && okm2 {
+		e.high, e.low = removeCommonMul(m1, m2)
+	}
 
 	//fmt.Println("simplify", e.high, e.low)
 
@@ -71,8 +80,38 @@ func (e *ExprsDivided) simplify() (ret Expression) {
 		// (a/b) / c = a / (b*c)
 		return div(d.high, mul(d.low, e.low)).simplify()
 	}
-
 	return e
+}
+
+// caution: edits high and low
+func removeCommonMul(high *ExprsMultiplied, low *ExprsMultiplied) (Expression, Expression) {
+	for i := 0; i < len(high.es); i++ {
+		for j := 0; j < len(low.es) && i >= 0; j++ {
+			if reflect.DeepEqual(high.es[i], low.es[j]) {
+				high.es = append(high.es[:i], high.es[i+1:]...)
+				low.es = append(low.es[:j], low.es[j+1:]...)
+				i--
+				j--
+			}
+		}
+	}
+	var r1 Expression
+	switch len(high.es) {
+	case 0:
+		r1 = num(1)
+	case 1:
+		r1 = high.es[0]
+	default:
+		r1 = high
+	}
+	switch len(low.es) {
+	case 0:
+		return r1, num(1)
+	case 1:
+		return r1, low.es[0]
+	default:
+		return r1, low
+	}
 }
 
 func (e *ExprsDivided) Derivative() Expression {

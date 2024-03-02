@@ -73,7 +73,7 @@ func mulMergeDivides(es []Expression) []Expression {
 		allhighs = append(allhighs, divs[i].high)
 		alllows = append(alllows, divs[i].low)
 	}
-	return append(rest, div(mul(allhighs...).simplify(), mul(alllows...).simplify()).simplify())
+	return append(rest, div(mul(allhighs...), mul(alllows...)).simplify())
 }
 
 // splitByType splits a list of expressions based on an input type. this is a generic function
