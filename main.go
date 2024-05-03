@@ -16,6 +16,12 @@ type Expression interface {
 	structure() string
 }
 
+var (
+	x = &Var{name: "x"}
+	y = &Var{name: "y"}
+	z = &Var{name: "z"}
+)
+
 func main() {
 
 	// ln(x + y)
@@ -29,7 +35,13 @@ func main() {
 
 	// 3x^2 + ln(x) + (cos(x))^2
 
-	x := &Var{name: "x", wrt: true}
+	v1 := vec3(y, y, z)
+	v2 := vec3(mul(exp(E, z), x, y), sin(x), y)
+
+	fmt.Println(v1.Curl())
+	fmt.Println(v2.Curl())
+	fmt.Println(v1.Curl().Cross(v2.Curl()))
+
 	//y := &Var{name: "y"}
 	//z := &Var{name: "z"}
 
@@ -38,13 +50,18 @@ func main() {
 	// x^2 + y^2 + z^2
 	//p := mul(polyParse("x^2", x), polyParse("x^2", y), polyParse("x^2", z))
 
-	m1 := mul(x, num(3))
+	//m1 := mul(x, num(3))
 
-	legible(m1)
-	p := div(m1, m1)
+	// cos(1 / x) * e^x
+
+	return
+	p := mul(cos(div(num(1), x)), exp(E, x))
+
+	//legible(m1)
+	//p := div(m1, m1)
 	fmt.Print("f(x)   = ")
 	legible(p)
-	legible(m1)
+	//legible(m1)
 	//fmt.Println(p.structure())
 	//fmt.Println(p.simplify().structure())
 	fmt.Print("f'(x)  = ")
@@ -89,6 +106,10 @@ func ftoa(f float64) string {
 }
 
 func legible(e Expression) {
+	fmt.Println(legibleStr(e))
+}
+
+func legibleStr(e Expression) string {
 	str := e.String()
 
 	colors := []string{
@@ -125,7 +146,7 @@ func legible(e Expression) {
 		}
 	}
 	result += "\033[0m"
-	fmt.Println(result)
+	return result
 }
 
 //func randomExpressionGenerator() Expression {
